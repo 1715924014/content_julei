@@ -6,3 +6,4 @@ __pycache__/
 data/
 output/
 output_run_check/
+.worktrees/
