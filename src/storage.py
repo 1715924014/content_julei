@@ -1,25 +1,20 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
 
 SOURCE_SUGGESTION_FIELDS = [
-    "suggestion_id",
+    "source_suggestion_id",
     "submit_date",
+    "created_at",
     "raw_text",
     "department",
     "job_group",
     "work_location",
     "scenario",
-    "is_anonymous_for_report",
     "status",
-    "owner_department",
-    "resolution_note",
-    "closed_date",
 ]
 
 COUNTABLE_TABLES = {
@@ -55,90 +50,116 @@ class Storage:
                 cursor_end TEXT,
                 started_at TEXT NOT NULL,
                 finished_at TEXT,
+                rows_read INTEGER NOT NULL DEFAULT 0,
+                rows_created INTEGER NOT NULL DEFAULT 0,
+                rows_skipped INTEGER NOT NULL DEFAULT 0,
+                rows_failed INTEGER NOT NULL DEFAULT 0,
+                error_summary TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS source_suggestions (
-                suggestion_id TEXT PRIMARY KEY,
+                source_suggestion_id TEXT PRIMARY KEY,
                 import_batch_id INTEGER,
                 submit_date TEXT,
-                raw_text TEXT,
+                created_at TEXT NOT NULL,
+                raw_text TEXT NOT NULL,
                 department TEXT,
                 job_group TEXT,
                 work_location TEXT,
                 scenario TEXT,
-                is_anonymous_for_report TEXT,
                 status TEXT,
-                owner_department TEXT,
-                resolution_note TEXT,
-                closed_date TEXT,
-                source_payload TEXT NOT NULL,
-                row_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (import_batch_id) REFERENCES import_batches(batch_id)
             );
 
             CREATE TABLE IF NOT EXISTS suggestion_analysis (
-                suggestion_id TEXT PRIMARY KEY,
-                primary_category TEXT,
-                secondary_category TEXT,
-                quality_type TEXT,
-                urgency_level TEXT,
-                confidence REAL,
-                review_required TEXT,
-                validation_flags TEXT,
-                analyzed_at TEXT NOT NULL,
+                analysis_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_suggestion_id TEXT NOT NULL UNIQUE,
+                batch_id INTEGER NOT NULL,
+                normalized_text TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                primary_category TEXT NOT NULL,
+                secondary_category TEXT NOT NULL,
+                owner_department TEXT NOT NULL,
+                quality_type TEXT NOT NULL,
+                urgency_level TEXT NOT NULL,
+                classification_confidence REAL NOT NULL,
+                embedding_status TEXT NOT NULL,
+                embedding_model TEXT,
+                embedding_ref TEXT,
+                review_required TEXT NOT NULL,
+                analysis_status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                FOREIGN KEY (suggestion_id) REFERENCES source_suggestions(suggestion_id)
+                FOREIGN KEY (source_suggestion_id) REFERENCES source_suggestions(source_suggestion_id),
+                FOREIGN KEY (batch_id) REFERENCES import_batches(batch_id)
             );
 
             CREATE TABLE IF NOT EXISTS issue_clusters (
                 cluster_id TEXT PRIMARY KEY,
-                cluster_name TEXT,
-                cluster_summary TEXT,
-                primary_category TEXT,
-                secondary_category TEXT,
-                owner_department TEXT,
-                urgency_level TEXT,
-                review_required_count INTEGER NOT NULL DEFAULT 0,
+                cluster_name TEXT NOT NULL,
+                cluster_summary TEXT NOT NULL,
+                primary_category TEXT NOT NULL,
+                secondary_category TEXT NOT NULL,
+                owner_department TEXT NOT NULL,
+                scenario_key TEXT,
+                status TEXT NOT NULL,
+                suggestion_count INTEGER NOT NULL,
+                representative_suggestion_id TEXT NOT NULL,
+                centroid_embedding_ref TEXT,
+                last_seen_at TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS cluster_members (
+                cluster_member_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 cluster_id TEXT NOT NULL,
-                suggestion_id TEXT NOT NULL,
-                member_order INTEGER NOT NULL DEFAULT 0,
+                source_suggestion_id TEXT NOT NULL,
+                decision_type TEXT NOT NULL,
+                vector_score REAL NOT NULL,
+                keyword_score REAL NOT NULL,
+                final_score REAL NOT NULL,
+                decision_status TEXT NOT NULL,
+                decision_reason TEXT NOT NULL,
+                reviewed_by TEXT,
+                reviewed_at TEXT,
                 created_at TEXT NOT NULL,
-                PRIMARY KEY (cluster_id, suggestion_id),
+                UNIQUE(cluster_id, source_suggestion_id),
                 FOREIGN KEY (cluster_id) REFERENCES issue_clusters(cluster_id),
-                FOREIGN KEY (suggestion_id) REFERENCES source_suggestions(suggestion_id)
+                FOREIGN KEY (source_suggestion_id) REFERENCES source_suggestions(source_suggestion_id)
             );
 
             CREATE TABLE IF NOT EXISTS review_tasks (
-                task_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                suggestion_id TEXT,
-                cluster_id TEXT,
+                review_task_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_suggestion_id TEXT NOT NULL,
+                candidate_cluster_id TEXT,
                 task_type TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                evidence_json TEXT NOT NULL,
                 status TEXT NOT NULL,
-                assigned_to TEXT,
-                due_date TEXT,
+                review_result TEXT,
+                reviewed_by TEXT,
+                reviewed_at TEXT,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (suggestion_id) REFERENCES source_suggestions(suggestion_id),
-                FOREIGN KEY (cluster_id) REFERENCES issue_clusters(cluster_id)
+                UNIQUE(source_suggestion_id, candidate_cluster_id, task_type),
+                FOREIGN KEY (source_suggestion_id) REFERENCES source_suggestions(source_suggestion_id),
+                FOREIGN KEY (candidate_cluster_id) REFERENCES issue_clusters(cluster_id)
             );
 
             CREATE TABLE IF NOT EXISTS action_items (
                 action_id TEXT PRIMARY KEY,
-                cluster_id TEXT,
+                cluster_id TEXT NOT NULL UNIQUE,
                 action_title TEXT NOT NULL,
-                owner_department TEXT,
-                urgency_level TEXT,
+                owner_department TEXT NOT NULL,
+                urgency_level TEXT NOT NULL,
                 status TEXT NOT NULL,
-                next_step TEXT,
+                suggestion_count INTEGER NOT NULL,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                next_step TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (cluster_id) REFERENCES issue_clusters(cluster_id)
@@ -161,68 +182,89 @@ class Storage:
         self.connection.commit()
         return int(cursor.lastrowid)
 
-    def finish_import_batch(self, batch_id: int, status: str, cursor_end: str | None = None) -> None:
+    def finish_import_batch(
+        self,
+        batch_id: int,
+        cursor_end: str,
+        *,
+        rows_read: int,
+        rows_created: int,
+        rows_skipped: int,
+        rows_failed: int,
+        error_summary: str | None = None,
+    ) -> None:
         now = utc_now()
+        status = "success" if rows_failed == 0 else "partial"
         self.connection.execute(
             """
             UPDATE import_batches
-            SET status = ?, cursor_end = ?, finished_at = ?, updated_at = ?
+            SET status = ?, cursor_end = ?, finished_at = ?, rows_read = ?,
+                rows_created = ?, rows_skipped = ?, rows_failed = ?,
+                error_summary = ?, updated_at = ?
             WHERE batch_id = ?
             """,
-            (status, cursor_end, now, now, batch_id),
+            (
+                status,
+                cursor_end,
+                now,
+                rows_read,
+                rows_created,
+                rows_skipped,
+                rows_failed,
+                error_summary,
+                now,
+                batch_id,
+            ),
         )
         self.connection.commit()
 
-    def get_import_batch(self, batch_id: int) -> sqlite3.Row | None:
-        return self.connection.execute(
+    def get_import_batch(self, batch_id: int) -> sqlite3.Row:
+        row = self.connection.execute(
             "SELECT * FROM import_batches WHERE batch_id = ?",
             (batch_id,),
         ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown import batch: {batch_id}")
+        return row
 
     def upsert_source_suggestion(self, row: dict[str, Any], import_batch_id: int | None = None) -> bool:
-        suggestion_id = str(row.get("suggestion_id", "")).strip()
-        if not suggestion_id:
-            raise ValueError("source suggestion requires suggestion_id")
+        source_suggestion_id = str(row.get("source_suggestion_id", "")).strip()
+        if not source_suggestion_id:
+            raise ValueError("source suggestion requires source_suggestion_id")
 
-        payload = json.dumps(row, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-        row_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
         existing = self.connection.execute(
-            "SELECT row_hash FROM source_suggestions WHERE suggestion_id = ?",
-            (suggestion_id,),
+            "SELECT raw_text, status FROM source_suggestions WHERE source_suggestion_id = ?",
+            (source_suggestion_id,),
         ).fetchone()
-        if existing is not None and existing["row_hash"] == row_hash:
+        raw_text = row["raw_text"]
+        status = row.get("status", "")
+        if existing is not None and existing["raw_text"] == raw_text and existing["status"] == status:
             return False
 
         now = utc_now()
         values = {field: row.get(field) for field in SOURCE_SUGGESTION_FIELDS}
+        created_at = values["created_at"] or now
         if existing is None:
             self.connection.execute(
                 """
                 INSERT INTO source_suggestions (
-                    suggestion_id, import_batch_id, submit_date, raw_text, department,
-                    job_group, work_location, scenario, is_anonymous_for_report, status,
-                    owner_department, resolution_note, closed_date, source_payload,
-                    row_hash, created_at, updated_at
+                    source_suggestion_id, import_batch_id, submit_date, created_at,
+                    raw_text, department, job_group, work_location, scenario, status,
+                    updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    suggestion_id,
+                    source_suggestion_id,
                     import_batch_id,
                     values["submit_date"],
+                    created_at,
                     values["raw_text"],
                     values["department"],
                     values["job_group"],
                     values["work_location"],
                     values["scenario"],
-                    values["is_anonymous_for_report"],
                     values["status"],
-                    values["owner_department"],
-                    values["resolution_note"],
-                    values["closed_date"],
-                    payload,
-                    row_hash,
-                    now,
                     now,
                 ),
             )
@@ -230,30 +272,23 @@ class Storage:
             self.connection.execute(
                 """
                 UPDATE source_suggestions
-                SET import_batch_id = ?, submit_date = ?, raw_text = ?, department = ?,
-                    job_group = ?, work_location = ?, scenario = ?,
-                    is_anonymous_for_report = ?, status = ?, owner_department = ?,
-                    resolution_note = ?, closed_date = ?, source_payload = ?,
-                    row_hash = ?, updated_at = ?
-                WHERE suggestion_id = ?
+                SET import_batch_id = ?, submit_date = ?, created_at = ?,
+                    raw_text = ?, department = ?, job_group = ?, work_location = ?,
+                    scenario = ?, status = ?, updated_at = ?
+                WHERE source_suggestion_id = ?
                 """,
                 (
                     import_batch_id,
                     values["submit_date"],
+                    created_at,
                     values["raw_text"],
                     values["department"],
                     values["job_group"],
                     values["work_location"],
                     values["scenario"],
-                    values["is_anonymous_for_report"],
                     values["status"],
-                    values["owner_department"],
-                    values["resolution_note"],
-                    values["closed_date"],
-                    payload,
-                    row_hash,
                     now,
-                    suggestion_id,
+                    source_suggestion_id,
                 ),
             )
         self.connection.commit()

@@ -10,25 +10,61 @@ class StorageTests(unittest.TestCase):
         storage.initialize_schema()
         return storage
 
-    def test_import_batch_lifecycle_stores_success_status_and_cursor_end(self):
+    def test_import_batch_lifecycle_stores_success_status_cursor_and_counts(self):
         storage = self.make_storage()
 
         batch_id = storage.start_import_batch("suggestions.csv", cursor_start="10")
-        storage.finish_import_batch(batch_id, status="success", cursor_end="25")
+        storage.finish_import_batch(
+            batch_id,
+            "25",
+            rows_read=12,
+            rows_created=8,
+            rows_skipped=4,
+            rows_failed=0,
+        )
 
         batch = storage.get_import_batch(batch_id)
-        self.assertIsNotNone(batch)
         self.assertEqual(batch["source_name"], "suggestions.csv")
         self.assertEqual(batch["cursor_start"], "10")
         self.assertEqual(batch["status"], "success")
         self.assertEqual(batch["cursor_end"], "25")
+        self.assertEqual(batch["rows_read"], 12)
+        self.assertEqual(batch["rows_created"], 8)
+        self.assertEqual(batch["rows_skipped"], 4)
+        self.assertEqual(batch["rows_failed"], 0)
+        self.assertIsNone(batch["error_summary"])
         self.assertIsNotNone(batch["started_at"])
         self.assertIsNotNone(batch["finished_at"])
 
-    def test_source_suggestion_upsert_is_idempotent_for_identical_rows(self):
+    def test_import_batch_finish_records_partial_status_when_rows_fail(self):
+        storage = self.make_storage()
+
+        batch_id = storage.start_import_batch("suggestions.csv", cursor_start="25")
+        storage.finish_import_batch(
+            batch_id,
+            "40",
+            rows_read=15,
+            rows_created=10,
+            rows_skipped=2,
+            rows_failed=3,
+            error_summary="3 rows missing raw_text",
+        )
+
+        batch = storage.get_import_batch(batch_id)
+        self.assertEqual(batch["status"], "partial")
+        self.assertEqual(batch["rows_failed"], 3)
+        self.assertEqual(batch["error_summary"], "3 rows missing raw_text")
+
+    def test_get_import_batch_raises_for_unknown_batch(self):
+        storage = self.make_storage()
+
+        with self.assertRaises(KeyError):
+            storage.get_import_batch(999)
+
+    def test_source_suggestion_upsert_is_idempotent_for_same_id_text_and_status(self):
         storage = self.make_storage()
         row = {
-            "suggestion_id": "S001",
+            "source_suggestion_id": "S001",
             "submit_date": "2026-06-01",
             "raw_text": "Need hotter canteen meals at night",
             "department": "Production",
@@ -37,7 +73,12 @@ class StorageTests(unittest.TestCase):
         }
 
         self.assertTrue(storage.upsert_source_suggestion(row))
-        self.assertFalse(storage.upsert_source_suggestion(dict(row)))
+        same_effective_row = dict(row, department="Operations")
+        self.assertFalse(storage.upsert_source_suggestion(same_effective_row))
+        self.assertEqual(storage.count_table("source_suggestions"), 1)
+
+        changed_status = dict(row, status="triaged")
+        self.assertTrue(storage.upsert_source_suggestion(changed_status))
         self.assertEqual(storage.count_table("source_suggestions"), 1)
 
 
