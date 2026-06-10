@@ -11,11 +11,18 @@ class TextProcessingTests(unittest.TestCase):
     def test_content_hash_is_stable_for_equivalent_spacing(self):
         self.assertEqual(content_hash("食堂 热饭"), content_hash(" 食堂\n热饭 "))
 
-    def test_text_features_includes_known_keywords_and_ngrams(self):
-        features = text_features("食堂 热饭")
+    def test_text_features_includes_injected_keywords_and_ngrams(self):
+        features = text_features("食堂 热饭", keywords=["食堂", "热饭"])
 
         self.assertIn("食堂", features)
         self.assertIn("热饭", features)
+        self.assertIn("堂热", features)
+        self.assertIn("堂热饭", features)
+
+    def test_text_features_defaults_to_ngrams_without_category_keywords(self):
+        features = text_features("食堂 热饭")
+
+        self.assertNotIn("饭", features)
         self.assertIn("堂热", features)
         self.assertIn("堂热饭", features)
 
