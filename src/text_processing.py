@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterable
 
 from src.domain import Suggestion
 
@@ -77,13 +78,20 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(normalize_text(text).encode("utf-8")).hexdigest()
 
 
-def text_features(text: str) -> set[str]:
+def text_features(text: str, keywords: Iterable[str] | None = None) -> set[str]:
     normalized = normalize_text(text)
     features: set[str] = set()
-    for rule in CATEGORY_RULES:
-        for keyword in rule["keywords"]:
-            if keyword in normalized:
-                features.add(keyword)
+    if keywords is None:
+        for rule in CATEGORY_RULES:
+            for keyword in rule["keywords"]:
+                if keyword in normalized:
+                    features.add(keyword)
+    else:
+        for keyword in keywords:
+            keyword = normalize_text(keyword)
+            if keyword:
+                if keyword in normalized:
+                    features.add(keyword)
     for size in (2, 3):
         for index in range(max(0, len(normalized) - size + 1)):
             features.add(normalized[index : index + size])

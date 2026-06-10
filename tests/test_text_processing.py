@@ -19,6 +19,14 @@ class TextProcessingTests(unittest.TestCase):
         self.assertIn("堂热", features)
         self.assertIn("堂热饭", features)
 
+    def test_text_features_includes_custom_keywords(self):
+        features = text_features("Alpha beta gamma", ["alpha", "delta"])
+
+        self.assertIn("alpha", features)
+        self.assertNotIn("delta", features)
+        self.assertIn("al", features)
+        self.assertIn("alp", features)
+
     def test_validate_suggestion_preserves_raw_text_and_detects_duplicates(self):
         seen_hashes: set[str] = set()
         original_text = " 食堂 热饭 "
