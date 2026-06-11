@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
+
+from src.vector_index import ClusterVector
 
 
 SOURCE_SUGGESTION_FIELDS = [
@@ -233,17 +236,29 @@ class Storage:
             raise ValueError("source suggestion requires source_suggestion_id")
 
         existing = self.connection.execute(
-            "SELECT raw_text, status FROM source_suggestions WHERE source_suggestion_id = ?",
+            """
+            SELECT submit_date, created_at, raw_text, department, job_group,
+                work_location, scenario, status
+            FROM source_suggestions
+            WHERE source_suggestion_id = ?
+            """,
             (source_suggestion_id,),
         ).fetchone()
-        raw_text = row["raw_text"]
-        status = row.get("status", "")
-        if existing is not None and existing["raw_text"] == raw_text and existing["status"] == status:
-            return False
 
         now = utc_now()
         values = {field: row.get(field) for field in SOURCE_SUGGESTION_FIELDS}
-        created_at = values["created_at"] or now
+        created_at = values["created_at"] or (existing["created_at"] if existing is not None else now)
+        values["created_at"] = created_at
+
+        if existing is not None:
+            changed_fields = [
+                field
+                for field in SOURCE_SUGGESTION_FIELDS
+                if field != "source_suggestion_id" and (existing[field] or "") != (values[field] or "")
+            ]
+            if not changed_fields:
+                return False
+
         if existing is None:
             self.connection.execute(
                 """
@@ -340,6 +355,199 @@ class Storage:
                 row["review_required"],
                 row["analysis_status"],
                 now,
+                now,
+            ),
+        )
+        self.connection.commit()
+
+    def list_active_cluster_vectors(self) -> list[ClusterVector]:
+        rows = self.connection.execute(
+            """
+            SELECT cluster_id, cluster_summary, centroid_embedding_ref,
+                primary_category, secondary_category, owner_department, status
+            FROM issue_clusters
+            WHERE status = ?
+            ORDER BY cluster_id
+            """,
+            ("active",),
+        ).fetchall()
+        clusters: list[ClusterVector] = []
+        for row in rows:
+            try:
+                vector = json.loads(row["centroid_embedding_ref"] or "[]")
+            except json.JSONDecodeError:
+                vector = []
+            if not isinstance(vector, list):
+                vector = []
+            clusters.append(
+                ClusterVector(
+                    cluster_id=row["cluster_id"],
+                    text=row["cluster_summary"],
+                    vector=[float(value) for value in vector],
+                    primary_category=row["primary_category"],
+                    secondary_category=row["secondary_category"],
+                    owner_department=row["owner_department"],
+                    active=row["status"] == "active",
+                )
+            )
+        return clusters
+
+    def get_issue_cluster(self, cluster_id: str) -> sqlite3.Row:
+        row = self.connection.execute(
+            "SELECT * FROM issue_clusters WHERE cluster_id = ?",
+            (cluster_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown issue cluster: {cluster_id}")
+        return row
+
+    def create_issue_cluster(
+        self,
+        *,
+        source_suggestion_id: str,
+        normalized_text: str,
+        primary_category: str,
+        secondary_category: str,
+        owner_department: str,
+        scenario_key: str,
+        centroid_embedding: list[float],
+    ) -> str:
+        now = utc_now()
+        row = self.connection.execute(
+            """
+            SELECT cluster_id
+            FROM issue_clusters
+            WHERE cluster_id LIKE 'CL%'
+            ORDER BY cluster_id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        next_number = int(row["cluster_id"][2:]) + 1 if row is not None else 1
+        cluster_id = f"CL{next_number:06d}"
+        cluster_name = secondary_category or primary_category
+        cluster_summary = normalized_text
+        self.connection.execute(
+            """
+            INSERT INTO issue_clusters (
+                cluster_id, cluster_name, cluster_summary, primary_category,
+                secondary_category, owner_department, scenario_key, status,
+                suggestion_count, representative_suggestion_id,
+                centroid_embedding_ref, last_seen_at, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                cluster_id,
+                cluster_name,
+                cluster_summary,
+                primary_category,
+                secondary_category,
+                owner_department,
+                scenario_key,
+                "active",
+                1,
+                source_suggestion_id,
+                json.dumps(centroid_embedding),
+                now,
+                now,
+                now,
+            ),
+        )
+        self.connection.commit()
+        return cluster_id
+
+    def add_cluster_member(
+        self,
+        *,
+        cluster_id: str,
+        source_suggestion_id: str,
+        decision_type: str,
+        vector_score: float,
+        keyword_score: float,
+        final_score: float,
+        decision_status: str,
+        decision_reason: str,
+    ) -> None:
+        now = utc_now()
+        existing_member = self.connection.execute(
+            """
+            SELECT 1
+            FROM cluster_members
+            WHERE cluster_id = ? AND source_suggestion_id = ?
+            """,
+            (cluster_id, source_suggestion_id),
+        ).fetchone()
+        self.connection.execute(
+            """
+            INSERT INTO cluster_members (
+                cluster_id, source_suggestion_id, decision_type, vector_score,
+                keyword_score, final_score, decision_status, decision_reason,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cluster_id, source_suggestion_id) DO UPDATE SET
+                decision_type = excluded.decision_type,
+                vector_score = excluded.vector_score,
+                keyword_score = excluded.keyword_score,
+                final_score = excluded.final_score,
+                decision_status = excluded.decision_status,
+                decision_reason = excluded.decision_reason
+            """,
+            (
+                cluster_id,
+                source_suggestion_id,
+                decision_type,
+                vector_score,
+                keyword_score,
+                final_score,
+                decision_status,
+                decision_reason,
+                now,
+            ),
+        )
+        if existing_member is None and decision_status == "accepted" and decision_type != "create_new_cluster":
+            self.connection.execute(
+                """
+                UPDATE issue_clusters
+                SET suggestion_count = suggestion_count + 1,
+                    last_seen_at = ?,
+                    updated_at = ?
+                WHERE cluster_id = ?
+                """,
+                (now, now, cluster_id),
+            )
+        self.connection.commit()
+
+    def create_review_task(
+        self,
+        *,
+        source_suggestion_id: str,
+        candidate_cluster_id: str | None,
+        task_type: str,
+        priority: int,
+        evidence: dict[str, Any],
+    ) -> None:
+        now = utc_now()
+        self.connection.execute(
+            """
+            INSERT INTO review_tasks (
+                source_suggestion_id, candidate_cluster_id, task_type,
+                priority, evidence_json, status, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_suggestion_id, candidate_cluster_id, task_type)
+            DO UPDATE SET
+                priority = excluded.priority,
+                evidence_json = excluded.evidence_json,
+                status = excluded.status
+            """,
+            (
+                source_suggestion_id,
+                candidate_cluster_id,
+                task_type,
+                priority,
+                json.dumps(evidence, sort_keys=True),
+                "pending",
                 now,
             ),
         )

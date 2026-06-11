@@ -61,7 +61,7 @@ class StorageTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             storage.get_import_batch(999)
 
-    def test_source_suggestion_upsert_is_idempotent_for_same_id_text_and_status(self):
+    def test_source_suggestion_upsert_is_idempotent_for_same_classification_fields(self):
         storage = self.make_storage()
         row = {
             "source_suggestion_id": "S001",
@@ -73,13 +73,41 @@ class StorageTests(unittest.TestCase):
         }
 
         self.assertTrue(storage.upsert_source_suggestion(row))
-        same_effective_row = dict(row, department="Operations")
-        self.assertFalse(storage.upsert_source_suggestion(same_effective_row))
+        self.assertFalse(storage.upsert_source_suggestion(dict(row)))
         self.assertEqual(storage.count_table("source_suggestions"), 1)
 
         changed_status = dict(row, status="triaged")
         self.assertTrue(storage.upsert_source_suggestion(changed_status))
         self.assertEqual(storage.count_table("source_suggestions"), 1)
+
+    def test_source_suggestion_upsert_detects_reporting_field_changes(self):
+        storage = self.make_storage()
+        row = {
+            "source_suggestion_id": "S001",
+            "submit_date": "2026-06-01",
+            "created_at": "2026-06-01",
+            "raw_text": "Need hotter canteen meals at night",
+            "department": "Production",
+            "job_group": "Line worker",
+            "work_location": "Plant A",
+            "scenario": "Canteen",
+            "status": "new",
+        }
+
+        self.assertTrue(storage.upsert_source_suggestion(row))
+        self.assertTrue(storage.upsert_source_suggestion(dict(row, department="Operations")))
+        self.assertTrue(storage.upsert_source_suggestion(dict(row, scenario="Night canteen")))
+        stored = storage.connection.execute(
+            """
+            SELECT department, scenario
+            FROM source_suggestions
+            WHERE source_suggestion_id = ?
+            """,
+            ("S001",),
+        ).fetchone()
+
+        self.assertEqual(stored["department"], "Production")
+        self.assertEqual(stored["scenario"], "Night canteen")
 
 
 if __name__ == "__main__":
