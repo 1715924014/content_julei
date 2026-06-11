@@ -92,14 +92,21 @@ class StorageTests(unittest.TestCase):
             "work_location": "Plant A",
             "scenario": "Canteen",
             "status": "new",
+            "owner_department": "Facilities",
         }
 
         self.assertTrue(storage.upsert_source_suggestion(row))
         self.assertTrue(storage.upsert_source_suggestion(dict(row, department="Operations")))
-        self.assertTrue(storage.upsert_source_suggestion(dict(row, scenario="Night canteen")))
+        changed_scenario = dict(row, scenario="Night canteen")
+        self.assertTrue(storage.upsert_source_suggestion(changed_scenario))
+        self.assertTrue(
+            storage.upsert_source_suggestion(
+                dict(changed_scenario, owner_department="Operations Excellence")
+            )
+        )
         stored = storage.connection.execute(
             """
-            SELECT department, scenario
+            SELECT department, scenario, owner_department
             FROM source_suggestions
             WHERE source_suggestion_id = ?
             """,
@@ -108,6 +115,7 @@ class StorageTests(unittest.TestCase):
 
         self.assertEqual(stored["department"], "Production")
         self.assertEqual(stored["scenario"], "Night canteen")
+        self.assertEqual(stored["owner_department"], "Operations Excellence")
 
 
 if __name__ == "__main__":

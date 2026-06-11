@@ -18,6 +18,7 @@ SOURCE_SUGGESTION_FIELDS = [
     "work_location",
     "scenario",
     "status",
+    "owner_department",
 ]
 
 COUNTABLE_TABLES = {
@@ -73,6 +74,7 @@ class Storage:
                 work_location TEXT,
                 scenario TEXT,
                 status TEXT,
+                owner_department TEXT,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (import_batch_id) REFERENCES import_batches(batch_id)
             );
@@ -169,7 +171,16 @@ class Storage:
             );
             """
         )
+        self._ensure_source_suggestions_owner_department()
         self.connection.commit()
+
+    def _ensure_source_suggestions_owner_department(self) -> None:
+        columns = {
+            row["name"]
+            for row in self.connection.execute("PRAGMA table_info(source_suggestions)").fetchall()
+        }
+        if "owner_department" not in columns:
+            self.connection.execute("ALTER TABLE source_suggestions ADD COLUMN owner_department TEXT")
 
     def start_import_batch(self, source_name: str, cursor_start: str | None = None, status: str = "running") -> int:
         now = utc_now()
@@ -238,7 +249,7 @@ class Storage:
         existing = self.connection.execute(
             """
             SELECT submit_date, created_at, raw_text, department, job_group,
-                work_location, scenario, status
+                work_location, scenario, status, owner_department
             FROM source_suggestions
             WHERE source_suggestion_id = ?
             """,
@@ -265,9 +276,9 @@ class Storage:
                 INSERT INTO source_suggestions (
                     source_suggestion_id, import_batch_id, submit_date, created_at,
                     raw_text, department, job_group, work_location, scenario, status,
-                    updated_at
+                    owner_department, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     source_suggestion_id,
@@ -280,6 +291,7 @@ class Storage:
                     values["work_location"],
                     values["scenario"],
                     values["status"],
+                    values["owner_department"],
                     now,
                 ),
             )
@@ -289,7 +301,7 @@ class Storage:
                 UPDATE source_suggestions
                 SET import_batch_id = ?, submit_date = ?, created_at = ?,
                     raw_text = ?, department = ?, job_group = ?, work_location = ?,
-                    scenario = ?, status = ?, updated_at = ?
+                    scenario = ?, status = ?, owner_department = ?, updated_at = ?
                 WHERE source_suggestion_id = ?
                 """,
                 (
@@ -302,12 +314,56 @@ class Storage:
                     values["work_location"],
                     values["scenario"],
                     values["status"],
+                    values["owner_department"],
                     now,
                     source_suggestion_id,
                 ),
             )
         self.connection.commit()
         return True
+
+    def clear_cluster_members_for_source(self, source_suggestion_id: str) -> None:
+        affected_clusters = self.connection.execute(
+            """
+            SELECT DISTINCT cluster_id
+            FROM cluster_members
+            WHERE source_suggestion_id = ?
+            """,
+            (source_suggestion_id,),
+        ).fetchall()
+        if not affected_clusters:
+            return
+
+        now = utc_now()
+        self.connection.execute(
+            "DELETE FROM cluster_members WHERE source_suggestion_id = ?",
+            (source_suggestion_id,),
+        )
+        for row in affected_clusters:
+            self.connection.execute(
+                """
+                UPDATE issue_clusters
+                SET suggestion_count = (
+                        SELECT COUNT(*)
+                        FROM cluster_members
+                        WHERE cluster_id = ? AND decision_status = 'accepted'
+                    ),
+                    updated_at = ?
+                WHERE cluster_id = ?
+                """,
+                (row["cluster_id"], now, row["cluster_id"]),
+            )
+        self.connection.commit()
+
+    def clear_review_tasks_for_source(self, source_suggestion_id: str) -> None:
+        self.connection.execute(
+            """
+            DELETE FROM review_tasks
+            WHERE source_suggestion_id = ? AND status = ?
+            """,
+            (source_suggestion_id, "pending"),
+        )
+        self.connection.commit()
 
     def upsert_suggestion_analysis(self, row: dict[str, Any]) -> None:
         now = utc_now()

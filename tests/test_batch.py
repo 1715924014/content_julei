@@ -117,6 +117,59 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertEqual(source["scenario"], "Night canteen")
         self.assertEqual(analysis_batch_id, second.batch_id)
 
+    def test_reimport_refreshes_analysis_when_owner_department_changes(self):
+        storage = self.make_storage()
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = self.write_csv(
+                directory,
+                [
+                    {
+                        "suggestion_id": "S001",
+                        "submit_date": "2026-06-01",
+                        "raw_text": "Night shift canteen meals are cold and need reheating",
+                        "department": "Production",
+                        "job_group": "Line worker",
+                        "work_location": "Plant A",
+                        "scenario": "Canteen",
+                        "status": "new",
+                        "owner_department": "Facilities",
+                    }
+                ],
+            )
+            first = run_csv_import_batch(storage, input_path)
+
+            changed_path = self.write_csv(
+                directory,
+                [
+                    {
+                        "suggestion_id": "S001",
+                        "submit_date": "2026-06-01",
+                        "raw_text": "Night shift canteen meals are cold and need reheating",
+                        "department": "Production",
+                        "job_group": "Line worker",
+                        "work_location": "Plant A",
+                        "scenario": "Canteen",
+                        "status": "new",
+                        "owner_department": "Operations Excellence",
+                    }
+                ],
+            )
+            second = run_csv_import_batch(storage, changed_path)
+            analysis = storage.connection.execute(
+                """
+                SELECT batch_id, owner_department
+                FROM suggestion_analysis
+                WHERE source_suggestion_id = ?
+                """,
+                ("S001",),
+            ).fetchone()
+
+        self.assertEqual(first.rows_created, 1)
+        self.assertEqual(second.rows_created, 1)
+        self.assertEqual(second.rows_skipped, 0)
+        self.assertEqual(analysis["batch_id"], second.batch_id)
+        self.assertEqual(analysis["owner_department"], "Operations Excellence")
+
     def test_first_import_creates_issue_cluster_and_member(self):
         storage = self.make_storage()
         with tempfile.TemporaryDirectory() as directory:
@@ -224,6 +277,66 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertEqual(storage.count_table("cluster_members"), 2)
         self.assertEqual([cluster["representative_suggestion_id"] for cluster in clusters], ["S001", "S002"])
         self.assertNotEqual(categories[0]["primary_category"], categories[1]["primary_category"])
+
+    def test_changed_source_suggestion_keeps_single_cluster_membership(self):
+        storage = self.make_storage()
+        logistics_keyword = str(CATEGORY_RULES[0]["keywords"][0])
+        equipment_keyword = str(CATEGORY_RULES[2]["keywords"][0])
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = self.write_csv(
+                directory,
+                [
+                    {
+                        "suggestion_id": "S001",
+                        "submit_date": "2026-06-01",
+                        "raw_text": f"{logistics_keyword} night shift meals need reheating",
+                        "department": "Production",
+                        "job_group": "Line worker",
+                        "work_location": "Plant A",
+                        "scenario": "Canteen",
+                        "status": "new",
+                    }
+                ],
+            )
+            run_csv_import_batch(storage, input_path)
+
+            changed_path = self.write_csv(
+                directory,
+                [
+                    {
+                        "suggestion_id": "S001",
+                        "submit_date": "2026-06-01",
+                        "raw_text": f"{equipment_keyword} keeps failing and needs urgent repair",
+                        "department": "Production",
+                        "job_group": "Line worker",
+                        "work_location": "Plant A",
+                        "scenario": "Equipment",
+                        "status": "new",
+                    }
+                ],
+            )
+            second = run_csv_import_batch(storage, changed_path)
+            members = storage.connection.execute(
+                """
+                SELECT cluster_id, source_suggestion_id
+                FROM cluster_members
+                WHERE source_suggestion_id = ?
+                ORDER BY cluster_id
+                """,
+                ("S001",),
+            ).fetchall()
+            clusters = storage.connection.execute(
+                """
+                SELECT cluster_id, suggestion_count
+                FROM issue_clusters
+                ORDER BY cluster_id
+                """
+            ).fetchall()
+
+        self.assertEqual(second.rows_created, 1)
+        self.assertEqual(len(members), 1)
+        self.assertEqual(members[0]["source_suggestion_id"], "S001")
+        self.assertEqual(sum(cluster["suggestion_count"] for cluster in clusters), 1)
 
 
 if __name__ == "__main__":

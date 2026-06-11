@@ -42,6 +42,7 @@ def source_row_from_csv(row: dict[str, str]) -> dict[str, str]:
         "work_location": row.get("work_location", ""),
         "scenario": row.get("scenario", ""),
         "status": row.get("status", ""),
+        "owner_department": row.get("owner_department", ""),
     }
 
 
@@ -177,6 +178,8 @@ def run_csv_import_batch(storage: Storage, input_path: Path) -> BatchResult:
             created = storage.upsert_source_suggestion(source_row, import_batch_id=batch_id)
             if created:
                 rows_created += 1
+                storage.clear_cluster_members_for_source(source_suggestion_id)
+                storage.clear_review_tasks_for_source(source_suggestion_id)
             else:
                 rows_skipped += 1
                 cursor_end = source_suggestion_id
