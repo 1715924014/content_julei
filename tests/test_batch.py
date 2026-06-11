@@ -46,6 +46,14 @@ class CsvImportBatchTests(unittest.TestCase):
             self.assertEqual(storage.count_table("suggestion_analysis"), 1)
 
             second = run_csv_import_batch(storage, input_path)
+            analysis_batch_id = storage.connection.execute(
+                """
+                SELECT batch_id
+                FROM suggestion_analysis
+                WHERE source_suggestion_id = ?
+                """,
+                ("S001",),
+            ).fetchone()["batch_id"]
 
         self.assertEqual(first.rows_read, 1)
         self.assertEqual(first.rows_created, 1)
@@ -55,6 +63,7 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertEqual(second.rows_created, 0)
         self.assertEqual(second.rows_skipped, 1)
         self.assertEqual(second.rows_failed, 0)
+        self.assertEqual(analysis_batch_id, first.batch_id)
         self.assertEqual(storage.count_table("source_suggestions"), 1)
         self.assertEqual(storage.count_table("suggestion_analysis"), 1)
 

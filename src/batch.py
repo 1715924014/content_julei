@@ -61,6 +61,8 @@ def run_csv_import_batch(storage: Storage, input_path: Path) -> BatchResult:
                 rows_created += 1
             else:
                 rows_skipped += 1
+                cursor_end = source_suggestion_id
+                continue
 
             suggestion = Suggestion({field: row.get(field, "").strip() for field in INPUT_FIELDS})
             flags = validate_suggestion(suggestion, seen_hashes)
