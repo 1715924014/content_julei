@@ -56,3 +56,19 @@ python -m unittest discover -s tests
 - 分析匿名：报告中不展示姓名、工号等身份字段。
 - 重点复核：高紧急度、高频、跨部门、低置信度、信息不足的问题进入人工复核。
 - 闭环优先：聚类结果按问题簇生成整改事项，而不是只做静态统计。
+
+## 工程化增量处理
+
+初始化本地分析数据库：
+
+```powershell
+python -m src.suggestion_pipeline init-db --db output_run_check/analysis.db
+```
+
+导入 CSV 到分析数据库：
+
+```powershell
+python -m src.suggestion_pipeline import-csv --input examples/sample_suggestions.csv --db output_run_check/analysis.db
+```
+
+当前版本使用 SQLite 作为本地开发和测试数据库。生产环境对接小程序 MySQL 时，应通过同一套 storage/repository 接口接入，避免改动分类、向量匹配和聚类业务逻辑。
