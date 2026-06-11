@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import argparse
 import csv
+import sqlite3
 from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
+from src.batch import run_csv_import_batch
 from src.classification import all_category_keywords, classify_suggestion, detect_quality_type, detect_urgency
 from src.domain import ANALYSIS_FIELDS, INPUT_FIELDS, STATUS_TO_ANALYZE, Cluster, Suggestion
 from src.reporting import action_item_rows, build_weekly_report, cluster_output_rows, suggestion_output_rows
+from src.storage import Storage
 from src.text_processing import text_features, validate_suggestion
 
 
@@ -223,6 +226,12 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser = subparsers.add_parser("analyze", help="分析员工建议 CSV")
     analyze_parser.add_argument("--input", required=True, type=Path, help="员工建议 CSV 输入路径")
     analyze_parser.add_argument("--output-dir", required=True, type=Path, help="分析结果输出目录")
+    init_db_parser = subparsers.add_parser("init-db", help="Initialize incremental import database")
+    init_db_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+
+    import_csv_parser = subparsers.add_parser("import-csv", help="Import suggestions CSV incrementally")
+    import_csv_parser.add_argument("--input", required=True, type=Path, help="Suggestions CSV input path")
+    import_csv_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     return parser
 
 
@@ -236,6 +245,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "analyze":
         analyze_file(args.input, args.output_dir)
         print(f"已生成分析结果目录：{args.output_dir}")
+        return 0
+    if args.command == "init-db":
+        args.db.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(args.db) as connection:
+            Storage(connection).initialize_schema()
+        print(f"Initialized database: {args.db}")
+        return 0
+    if args.command == "import-csv":
+        with sqlite3.connect(args.db) as connection:
+            storage = Storage(connection)
+            storage.initialize_schema()
+            result = run_csv_import_batch(storage, args.input)
+        print(
+            f"Imported batch {result.batch_id}: read={result.rows_read}, "
+            f"created={result.rows_created}, skipped={result.rows_skipped}, failed={result.rows_failed}"
+        )
         return 0
     parser.error("未知命令")
     return 2

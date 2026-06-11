@@ -294,6 +294,57 @@ class Storage:
         self.connection.commit()
         return True
 
+    def upsert_suggestion_analysis(self, row: dict[str, Any]) -> None:
+        now = utc_now()
+        self.connection.execute(
+            """
+            INSERT INTO suggestion_analysis (
+                source_suggestion_id, batch_id, normalized_text, content_hash,
+                primary_category, secondary_category, owner_department,
+                quality_type, urgency_level, classification_confidence,
+                embedding_status, embedding_model, embedding_ref,
+                review_required, analysis_status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_suggestion_id) DO UPDATE SET
+                batch_id = excluded.batch_id,
+                normalized_text = excluded.normalized_text,
+                content_hash = excluded.content_hash,
+                primary_category = excluded.primary_category,
+                secondary_category = excluded.secondary_category,
+                owner_department = excluded.owner_department,
+                quality_type = excluded.quality_type,
+                urgency_level = excluded.urgency_level,
+                classification_confidence = excluded.classification_confidence,
+                embedding_status = excluded.embedding_status,
+                embedding_model = excluded.embedding_model,
+                embedding_ref = excluded.embedding_ref,
+                review_required = excluded.review_required,
+                analysis_status = excluded.analysis_status,
+                updated_at = excluded.updated_at
+            """,
+            (
+                row["source_suggestion_id"],
+                row["batch_id"],
+                row["normalized_text"],
+                row["content_hash"],
+                row["primary_category"],
+                row["secondary_category"],
+                row["owner_department"],
+                row["quality_type"],
+                row["urgency_level"],
+                row["classification_confidence"],
+                row["embedding_status"],
+                row.get("embedding_model"),
+                row.get("embedding_ref"),
+                row["review_required"],
+                row["analysis_status"],
+                now,
+                now,
+            ),
+        )
+        self.connection.commit()
+
     def count_table(self, table_name: str) -> int:
         if table_name not in COUNTABLE_TABLES:
             raise ValueError(f"cannot count unknown table: {table_name}")
