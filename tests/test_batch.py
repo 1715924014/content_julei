@@ -366,6 +366,67 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertEqual(storage.count_table("source_suggestions"), 1)
         self.assertEqual(storage.count_table("issue_clusters"), 1)
 
+    def test_run_rows_import_batch_persists_source_cursor_end(self):
+        storage = self.make_storage()
+        rows = [
+            {
+                "suggestion_id": "M001",
+                "_source_cursor": "105",
+                "submit_date": "2026-06-16",
+                "raw_text": "夜班食堂没有热饭",
+                "department": "生产一部",
+                "job_group": "一线",
+                "work_location": "A厂区",
+                "scenario": "食堂",
+                "is_anonymous_for_report": "是",
+                "status": "待识别",
+                "owner_department": "",
+                "resolution_note": "",
+                "closed_date": "",
+            },
+            {
+                "suggestion_id": "M002",
+                "_source_cursor": "110",
+                "submit_date": "2026-06-16",
+                "raw_text": "宿舍卫生需要加强",
+                "department": "生产二部",
+                "job_group": "一线",
+                "work_location": "B厂区",
+                "scenario": "宿舍",
+                "is_anonymous_for_report": "是",
+                "status": "待识别",
+                "owner_department": "",
+                "resolution_note": "",
+                "closed_date": "",
+            },
+        ]
+
+        result = run_rows_import_batch(
+            storage,
+            rows,
+            source_name="mysql",
+            cursor_start="100",
+            cursor_field="_source_cursor",
+        )
+        batch = storage.get_import_batch(result.batch_id)
+
+        self.assertEqual(batch["cursor_end"], "110")
+
+    def test_empty_rows_import_batch_keeps_cursor_end_at_start(self):
+        storage = self.make_storage()
+
+        result = run_rows_import_batch(
+            storage,
+            [],
+            source_name="mysql",
+            cursor_start="100",
+            cursor_field="_source_cursor",
+        )
+        batch = storage.get_import_batch(result.batch_id)
+
+        self.assertEqual(batch["rows_read"], 0)
+        self.assertEqual(batch["cursor_end"], "100")
+
 
 if __name__ == "__main__":
     unittest.main()

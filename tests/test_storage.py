@@ -61,6 +61,40 @@ class StorageTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             storage.get_import_batch(999)
 
+    def test_latest_successful_cursor_uses_most_recent_success_for_source(self):
+        storage = self.make_storage()
+
+        first = storage.start_import_batch("mysql", cursor_start="0")
+        storage.finish_import_batch(
+            first,
+            "100",
+            rows_read=10,
+            rows_created=10,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+        partial = storage.start_import_batch("mysql", cursor_start="100")
+        storage.finish_import_batch(
+            partial,
+            "200",
+            rows_read=10,
+            rows_created=9,
+            rows_skipped=0,
+            rows_failed=1,
+        )
+        other_source = storage.start_import_batch("csv", cursor_start="0")
+        storage.finish_import_batch(
+            other_source,
+            "999",
+            rows_read=1,
+            rows_created=1,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+
+        self.assertEqual(storage.get_latest_successful_cursor("mysql"), "100")
+        self.assertEqual(storage.get_latest_successful_cursor("missing"), "")
+
     def test_source_suggestion_upsert_is_idempotent_for_same_classification_fields(self):
         storage = self.make_storage()
         row = {

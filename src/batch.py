@@ -166,6 +166,7 @@ def run_rows_import_batch(
     *,
     source_name: str,
     cursor_start: str = "0",
+    cursor_field: str = "suggestion_id",
 ) -> BatchResult:
     batch_id = storage.start_import_batch(source_name, cursor_start=cursor_start)
     embedding_provider = HashEmbeddingProvider()
@@ -173,13 +174,14 @@ def run_rows_import_batch(
     rows_created = 0
     rows_skipped = 0
     rows_failed = 0
-    cursor_end = "0"
+    cursor_end = cursor_start
     error_summary: str | None = None
 
     for row in rows:
         try:
             source_row = source_row_from_csv(row)
             source_suggestion_id = source_row["source_suggestion_id"]
+            row_cursor = str(row.get(cursor_field) or source_suggestion_id)
             created = storage.upsert_source_suggestion(source_row, import_batch_id=batch_id)
             if created:
                 rows_created += 1
@@ -187,7 +189,7 @@ def run_rows_import_batch(
                 storage.clear_review_tasks_for_source(source_suggestion_id)
             else:
                 rows_skipped += 1
-                cursor_end = source_suggestion_id
+                cursor_end = row_cursor
                 continue
 
             suggestion = Suggestion({field: row.get(field, "").strip() for field in INPUT_FIELDS})
@@ -232,7 +234,7 @@ def run_rows_import_batch(
                 category_confidence=confidence,
                 embedding=embedding,
             )
-            cursor_end = source_suggestion_id
+            cursor_end = row_cursor
         except Exception as exc:
             rows_failed += 1
             error_summary = str(exc)

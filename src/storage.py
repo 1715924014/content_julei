@@ -241,6 +241,21 @@ class Storage:
             raise KeyError(f"unknown import batch: {batch_id}")
         return row
 
+    def get_latest_successful_cursor(self, source_name: str) -> str:
+        row = self.connection.execute(
+            """
+            SELECT cursor_end
+            FROM import_batches
+            WHERE source_name = ? AND status = ? AND cursor_end IS NOT NULL
+            ORDER BY batch_id DESC
+            LIMIT 1
+            """,
+            (source_name, "success"),
+        ).fetchone()
+        if row is None:
+            return ""
+        return str(row["cursor_end"] or "")
+
     def upsert_source_suggestion(self, row: dict[str, Any], import_batch_id: int | None = None) -> bool:
         source_suggestion_id = str(row.get("source_suggestion_id", "")).strip()
         if not source_suggestion_id:

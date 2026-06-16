@@ -238,7 +238,11 @@ def build_parser() -> argparse.ArgumentParser:
     import_mysql_parser = subparsers.add_parser("import-mysql", help="Import suggestions from a MySQL source")
     import_mysql_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
     import_mysql_parser.add_argument("--db", required=True, type=Path, help="SQLite analysis database path")
-    import_mysql_parser.add_argument("--cursor", default="", help="Last imported source cursor value")
+    import_mysql_parser.add_argument(
+        "--cursor",
+        default=None,
+        help="Last imported source cursor value. Defaults to the latest successful mysql batch cursor.",
+    )
     import_mysql_parser.add_argument("--limit", type=int, default=None, help="Maximum source rows to import")
     return parser
 
@@ -272,21 +276,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "import-mysql":
         config = load_app_config(args.config)
-        with connect_mysql(config.mysql_source) as source_connection:
-            rows = fetch_incremental_rows(
-                source_connection,
-                config.mysql_source,
-                cursor_value=args.cursor,
-                limit=args.limit,
-            )
         with sqlite3.connect(args.db) as connection:
             storage = Storage(connection)
             storage.initialize_schema()
+            cursor_start = args.cursor
+            if cursor_start is None:
+                cursor_start = storage.get_latest_successful_cursor("mysql")
+            with connect_mysql(config.mysql_source) as source_connection:
+                rows = fetch_incremental_rows(
+                    source_connection,
+                    config.mysql_source,
+                    cursor_value=cursor_start,
+                    limit=args.limit,
+                )
             result = run_rows_import_batch(
                 storage,
                 rows,
                 source_name="mysql",
-                cursor_start=args.cursor or "0",
+                cursor_start=cursor_start or "0",
+                cursor_field="_source_cursor",
             )
         print(
             f"Imported MySQL batch {result.batch_id}: read={result.rows_read}, "

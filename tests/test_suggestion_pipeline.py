@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock, patch
 
 from src.suggestion_pipeline import INPUT_FIELDS, analyze_rows
 
@@ -66,6 +67,43 @@ class SuggestionPipelineTests(unittest.TestCase):
 
         self.assertEqual(suggestions[1].analysis["quality_type"], "重复问题")
         self.assertIn("疑似重复", suggestions[1].analysis["validation_flags"])
+
+    def test_import_mysql_uses_latest_successful_cursor_when_not_provided(self):
+        config = Mock()
+        config.mysql_source = Mock()
+        source_connection = Mock()
+        source_connection.__enter__ = Mock(return_value=source_connection)
+        source_connection.__exit__ = Mock(return_value=None)
+
+        storage = Mock()
+        storage.get_latest_successful_cursor.return_value = "250"
+        batch_result = Mock(batch_id=1, rows_read=0, rows_created=0, rows_skipped=0, rows_failed=0)
+
+        with patch("src.suggestion_pipeline.load_app_config", return_value=config), patch(
+            "src.suggestion_pipeline.connect_mysql", return_value=source_connection
+        ), patch("src.suggestion_pipeline.fetch_incremental_rows", return_value=[] ) as fetch_rows, patch(
+            "src.suggestion_pipeline.Storage", return_value=storage
+        ), patch("src.suggestion_pipeline.run_rows_import_batch", return_value=batch_result) as run_batch, patch(
+            "src.suggestion_pipeline.sqlite3.connect"
+        ):
+            from src.suggestion_pipeline import main
+
+            exit_code = main(["import-mysql", "--config", "config.json", "--db", "analysis.db"])
+
+        self.assertEqual(exit_code, 0)
+        fetch_rows.assert_called_once_with(
+            source_connection,
+            config.mysql_source,
+            cursor_value="250",
+            limit=None,
+        )
+        run_batch.assert_called_once_with(
+            storage,
+            [],
+            source_name="mysql",
+            cursor_start="250",
+            cursor_field="_source_cursor",
+        )
 
 
 if __name__ == "__main__":

@@ -39,6 +39,8 @@ def map_mysql_row(row: dict[str, Any], config: MySQLSourceConfig) -> dict[str, s
         source_column = config.field_mapping.get(field)
         value = row.get(source_column, "") if source_column else ""
         mapped[field] = "" if value is None else str(value)
+    cursor_value = row.get(config.cursor_field, "")
+    mapped["_source_cursor"] = "" if cursor_value is None else str(cursor_value)
     return mapped
 
 
