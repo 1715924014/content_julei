@@ -90,6 +90,12 @@ MySQL 导入会自动读取上一批成功导入的 `cursor_end` 作为下一次
 python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.example.json --db output_run_check/analysis.db --log-dir logs --limit 10000
 ```
 
+Windows 任务计划程序可以直接调用脚本，先在运行账号下配置好 `MINI_PROGRAM_DB_PASSWORD` 环境变量：
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -ConfigPath config\mysql.example.json -DbPath data\analysis.db -LogDir logs -Limit 10000
+```
+
 查看最近导入批次、最新成功游标和核心表数量：
 
 ```powershell
