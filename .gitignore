@@ -7,6 +7,7 @@ data/
 output/
 output_run_check/
 .worktrees/
+.idea/
 *.db
 *.sqlite
 *.sqlite3
