@@ -7,11 +7,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
-from src.batch import run_csv_import_batch, run_rows_import_batch
+from src.batch import run_csv_import_batch
 from src.classification import all_category_keywords, classify_suggestion, detect_quality_type, detect_urgency
-from src.config import load_app_config
 from src.domain import ANALYSIS_FIELDS, INPUT_FIELDS, STATUS_TO_ANALYZE, Cluster, Suggestion
-from src.mysql_source import connect_mysql, fetch_incremental_rows
+from src.import_jobs import import_mysql_batch, run_daily_mysql_job
 from src.reporting import action_item_rows, build_weekly_report, cluster_output_rows, suggestion_output_rows
 from src.storage import Storage
 from src.text_processing import text_features, validate_suggestion
@@ -244,6 +243,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Last imported source cursor value. Defaults to the latest successful mysql batch cursor.",
     )
     import_mysql_parser.add_argument("--limit", type=int, default=None, help="Maximum source rows to import")
+
+    daily_mysql_parser = subparsers.add_parser("run-daily-mysql", help="Run daily MySQL import and write a job log")
+    daily_mysql_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
+    daily_mysql_parser.add_argument("--db", required=True, type=Path, help="SQLite analysis database path")
+    daily_mysql_parser.add_argument("--log-dir", required=True, type=Path, help="Directory for daily job JSON logs")
+    daily_mysql_parser.add_argument(
+        "--cursor",
+        default=None,
+        help="Override the latest successful mysql batch cursor for backfill or recovery.",
+    )
+    daily_mysql_parser.add_argument("--limit", type=int, default=None, help="Maximum source rows to import")
     return parser
 
 
@@ -275,32 +285,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if args.command == "import-mysql":
-        config = load_app_config(args.config)
-        with sqlite3.connect(args.db) as connection:
-            storage = Storage(connection)
-            storage.initialize_schema()
-            cursor_start = args.cursor
-            if cursor_start is None:
-                cursor_start = storage.get_latest_successful_cursor("mysql")
-            with connect_mysql(config.mysql_source) as source_connection:
-                rows = fetch_incremental_rows(
-                    source_connection,
-                    config.mysql_source,
-                    cursor_value=cursor_start,
-                    limit=args.limit,
-                )
-            result = run_rows_import_batch(
-                storage,
-                rows,
-                source_name="mysql",
-                cursor_start=cursor_start or "0",
-                cursor_field="_source_cursor",
-            )
+        result = import_mysql_batch(
+            config_path=args.config,
+            db_path=args.db,
+            cursor_override=args.cursor,
+            limit=args.limit,
+        )
         print(
             f"Imported MySQL batch {result.batch_id}: read={result.rows_read}, "
             f"created={result.rows_created}, skipped={result.rows_skipped}, failed={result.rows_failed}"
         )
         return 0
+    if args.command == "run-daily-mysql":
+        return run_daily_mysql_job(
+            config_path=args.config,
+            db_path=args.db,
+            log_dir=args.log_dir,
+            cursor_override=args.cursor,
+            limit=args.limit,
+        )
     parser.error("未知命令")
     return 2
 

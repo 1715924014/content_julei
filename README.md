@@ -83,3 +83,9 @@ python -m src.suggestion_pipeline import-mysql --config config/mysql.example.jso
 `config/mysql.example.json` 中的 `field_mapping` 用来把小程序表字段映射到分析管道需要的输入字段。生产环境请复制一份私有配置文件并修改连接信息，不要把真实密码写入配置文件。
 
 MySQL 导入会自动读取上一批成功导入的 `cursor_end` 作为下一次的增量起点；首次导入没有历史游标时从空游标开始。需要补数或故障恢复时，可以显式传入 `--cursor 12345` 覆盖自动游标。
+
+每日计划任务建议调用固定入口，它会执行 MySQL 增量导入并在 `logs/` 下写入 JSON 运行日志；失败时命令返回非 0，方便任务计划程序识别告警：
+
+```powershell
+python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.example.json --db output_run_check/analysis.db --log-dir logs --limit 10000
+```

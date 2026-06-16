@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.suggestion_pipeline import INPUT_FIELDS, analyze_rows
@@ -68,41 +69,57 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(suggestions[1].analysis["quality_type"], "重复问题")
         self.assertIn("疑似重复", suggestions[1].analysis["validation_flags"])
 
-    def test_import_mysql_uses_latest_successful_cursor_when_not_provided(self):
-        config = Mock()
-        config.mysql_source = Mock()
-        source_connection = Mock()
-        source_connection.__enter__ = Mock(return_value=source_connection)
-        source_connection.__exit__ = Mock(return_value=None)
-
-        storage = Mock()
-        storage.get_latest_successful_cursor.return_value = "250"
+    def test_import_mysql_delegates_to_import_job(self):
         batch_result = Mock(batch_id=1, rows_read=0, rows_created=0, rows_skipped=0, rows_failed=0)
 
-        with patch("src.suggestion_pipeline.load_app_config", return_value=config), patch(
-            "src.suggestion_pipeline.connect_mysql", return_value=source_connection
-        ), patch("src.suggestion_pipeline.fetch_incremental_rows", return_value=[] ) as fetch_rows, patch(
-            "src.suggestion_pipeline.Storage", return_value=storage
-        ), patch("src.suggestion_pipeline.run_rows_import_batch", return_value=batch_result) as run_batch, patch(
-            "src.suggestion_pipeline.sqlite3.connect"
-        ):
+        with patch("src.suggestion_pipeline.import_mysql_batch", return_value=batch_result) as import_batch:
             from src.suggestion_pipeline import main
 
-            exit_code = main(["import-mysql", "--config", "config.json", "--db", "analysis.db"])
+            exit_code = main(
+                [
+                    "import-mysql",
+                    "--config",
+                    "config.json",
+                    "--db",
+                    "analysis.db",
+                    "--cursor",
+                    "250",
+                    "--limit",
+                    "1000",
+                ]
+            )
 
         self.assertEqual(exit_code, 0)
-        fetch_rows.assert_called_once_with(
-            source_connection,
-            config.mysql_source,
-            cursor_value="250",
-            limit=None,
+        import_batch.assert_called_once_with(
+            config_path=Path("config.json"),
+            db_path=Path("analysis.db"),
+            cursor_override="250",
+            limit=1000,
         )
-        run_batch.assert_called_once_with(
-            storage,
-            [],
-            source_name="mysql",
-            cursor_start="250",
-            cursor_field="_source_cursor",
+
+    def test_run_daily_mysql_delegates_to_daily_job(self):
+        with patch("src.suggestion_pipeline.run_daily_mysql_job", return_value=1) as run_job:
+            from src.suggestion_pipeline import main
+
+            exit_code = main(
+                [
+                    "run-daily-mysql",
+                    "--config",
+                    "config.json",
+                    "--db",
+                    "analysis.db",
+                    "--log-dir",
+                    "logs",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        run_job.assert_called_once_with(
+            config_path=Path("config.json"),
+            db_path=Path("analysis.db"),
+            log_dir=Path("logs"),
+            cursor_override=None,
+            limit=None,
         )
 
 
