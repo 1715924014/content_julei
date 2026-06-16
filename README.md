@@ -101,3 +101,5 @@ powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -Projec
 ```powershell
 python -m src.suggestion_pipeline status --db output_run_check/analysis.db --source mysql
 ```
+
+部署检查、每日巡检、失败处理和补数恢复请参考 `docs/operations.md`。
