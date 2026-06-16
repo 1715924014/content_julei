@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.batch import run_csv_import_batch
+from src.batch import run_csv_import_batch, run_rows_import_batch
 from src.classification import CATEGORY_RULES
 from src.domain import INPUT_FIELDS
 from src.storage import Storage
@@ -337,6 +337,34 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertEqual(len(members), 1)
         self.assertEqual(members[0]["source_suggestion_id"], "S001")
         self.assertEqual(sum(cluster["suggestion_count"] for cluster in clusters), 1)
+
+    def test_run_rows_import_batch_accepts_mysql_mapped_rows(self):
+        storage = self.make_storage()
+        rows = [
+            {
+                "suggestion_id": "M001",
+                "submit_date": "2026-06-16",
+                "raw_text": "夜班食堂没有热饭",
+                "department": "生产一部",
+                "job_group": "一线",
+                "work_location": "A厂区",
+                "scenario": "食堂",
+                "is_anonymous_for_report": "是",
+                "status": "待识别",
+                "owner_department": "",
+                "resolution_note": "",
+                "closed_date": "",
+            }
+        ]
+
+        result = run_rows_import_batch(storage, rows, source_name="mysql", cursor_start="100")
+        batch = storage.get_import_batch(result.batch_id)
+
+        self.assertEqual(result.rows_created, 1)
+        self.assertEqual(batch["source_name"], "mysql")
+        self.assertEqual(batch["cursor_start"], "100")
+        self.assertEqual(storage.count_table("source_suggestions"), 1)
+        self.assertEqual(storage.count_table("issue_clusters"), 1)
 
 
 if __name__ == "__main__":

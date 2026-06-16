@@ -72,3 +72,12 @@ python -m src.suggestion_pipeline import-csv --input examples/sample_suggestions
 ```
 
 当前版本使用 SQLite 作为本地开发和测试数据库。生产环境对接小程序 MySQL 时，应通过同一套 storage/repository 接口接入，避免改动分类、向量匹配和聚类业务逻辑。
+
+从 MySQL 源表增量导入：
+
+```powershell
+$env:MINI_PROGRAM_DB_PASSWORD="your_password"
+python -m src.suggestion_pipeline import-mysql --config config/mysql.example.json --db output_run_check/analysis.db --cursor 0 --limit 1000
+```
+
+`config/mysql.example.json` 中的 `field_mapping` 用来把小程序表字段映射到分析管道需要的输入字段。生产环境请复制一份私有配置文件并修改连接信息，不要把真实密码写入配置文件。

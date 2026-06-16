@@ -7,9 +7,11 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
-from src.batch import run_csv_import_batch
+from src.batch import run_csv_import_batch, run_rows_import_batch
 from src.classification import all_category_keywords, classify_suggestion, detect_quality_type, detect_urgency
+from src.config import load_app_config
 from src.domain import ANALYSIS_FIELDS, INPUT_FIELDS, STATUS_TO_ANALYZE, Cluster, Suggestion
+from src.mysql_source import connect_mysql, fetch_incremental_rows
 from src.reporting import action_item_rows, build_weekly_report, cluster_output_rows, suggestion_output_rows
 from src.storage import Storage
 from src.text_processing import text_features, validate_suggestion
@@ -232,6 +234,12 @@ def build_parser() -> argparse.ArgumentParser:
     import_csv_parser = subparsers.add_parser("import-csv", help="Import suggestions CSV incrementally")
     import_csv_parser.add_argument("--input", required=True, type=Path, help="Suggestions CSV input path")
     import_csv_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+
+    import_mysql_parser = subparsers.add_parser("import-mysql", help="Import suggestions from a MySQL source")
+    import_mysql_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
+    import_mysql_parser.add_argument("--db", required=True, type=Path, help="SQLite analysis database path")
+    import_mysql_parser.add_argument("--cursor", default="", help="Last imported source cursor value")
+    import_mysql_parser.add_argument("--limit", type=int, default=None, help="Maximum source rows to import")
     return parser
 
 
@@ -259,6 +267,29 @@ def main(argv: list[str] | None = None) -> int:
             result = run_csv_import_batch(storage, args.input)
         print(
             f"Imported batch {result.batch_id}: read={result.rows_read}, "
+            f"created={result.rows_created}, skipped={result.rows_skipped}, failed={result.rows_failed}"
+        )
+        return 0
+    if args.command == "import-mysql":
+        config = load_app_config(args.config)
+        with connect_mysql(config.mysql_source) as source_connection:
+            rows = fetch_incremental_rows(
+                source_connection,
+                config.mysql_source,
+                cursor_value=args.cursor,
+                limit=args.limit,
+            )
+        with sqlite3.connect(args.db) as connection:
+            storage = Storage(connection)
+            storage.initialize_schema()
+            result = run_rows_import_batch(
+                storage,
+                rows,
+                source_name="mysql",
+                cursor_start=args.cursor or "0",
+            )
+        print(
+            f"Imported MySQL batch {result.batch_id}: read={result.rows_read}, "
             f"created={result.rows_created}, skipped={result.rows_skipped}, failed={result.rows_failed}"
         )
         return 0

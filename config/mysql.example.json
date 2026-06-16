@@ -1,0 +1,25 @@
+{
+  "mysql_source": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "database": "mini_program",
+    "user": "report_user",
+    "password_env": "MINI_PROGRAM_DB_PASSWORD",
+    "table": "employee_suggestions",
+    "cursor_field": "id",
+    "field_mapping": {
+      "suggestion_id": "id",
+      "submit_date": "created_at",
+      "raw_text": "content",
+      "department": "department_name",
+      "job_group": "job_group",
+      "work_location": "work_location",
+      "scenario": "scenario",
+      "is_anonymous_for_report": "anonymous_flag",
+      "status": "status",
+      "owner_department": "owner_department",
+      "resolution_note": "resolution_note",
+      "closed_date": "closed_at"
+    }
+  }
+}

@@ -160,9 +160,14 @@ def persist_cluster_decision(
         )
 
 
-def run_csv_import_batch(storage: Storage, input_path: Path) -> BatchResult:
-    rows = read_csv(input_path)
-    batch_id = storage.start_import_batch("csv", cursor_start="0")
+def run_rows_import_batch(
+    storage: Storage,
+    rows: list[dict[str, str]],
+    *,
+    source_name: str,
+    cursor_start: str = "0",
+) -> BatchResult:
+    batch_id = storage.start_import_batch(source_name, cursor_start=cursor_start)
     embedding_provider = HashEmbeddingProvider()
     seen_hashes: set[str] = set()
     rows_created = 0
@@ -242,3 +247,8 @@ def run_csv_import_batch(storage: Storage, input_path: Path) -> BatchResult:
         error_summary=error_summary,
     )
     return BatchResult(batch_id, len(rows), rows_created, rows_skipped, rows_failed)
+
+
+def run_csv_import_batch(storage: Storage, input_path: Path) -> BatchResult:
+    rows = read_csv(input_path)
+    return run_rows_import_batch(storage, rows, source_name="csv", cursor_start="0")
