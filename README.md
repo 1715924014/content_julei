@@ -89,3 +89,9 @@ MySQL 导入会自动读取上一批成功导入的 `cursor_end` 作为下一次
 ```powershell
 python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.example.json --db output_run_check/analysis.db --log-dir logs --limit 10000
 ```
+
+查看最近导入批次、最新成功游标和核心表数量：
+
+```powershell
+python -m src.suggestion_pipeline status --db output_run_check/analysis.db --source mysql
+```

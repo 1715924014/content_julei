@@ -1,8 +1,14 @@
+import io
+import json
+import sqlite3
+import tempfile
 import unittest
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.suggestion_pipeline import INPUT_FIELDS, analyze_rows
+from src.storage import Storage
 
 
 def row(suggestion_id, raw_text, department="生产一部", scenario="食堂"):
@@ -121,6 +127,34 @@ class SuggestionPipelineTests(unittest.TestCase):
             cursor_override=None,
             limit=None,
         )
+
+    def test_status_outputs_import_summary_as_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            with closing(sqlite3.connect(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                batch_id = storage.start_import_batch("mysql", cursor_start="0")
+                storage.finish_import_batch(
+                    batch_id,
+                    "100",
+                    rows_read=10,
+                    rows_created=10,
+                    rows_skipped=0,
+                    rows_failed=0,
+                )
+
+            from src.suggestion_pipeline import main
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(["status", "--db", str(db_path), "--source", "mysql"])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["source_name"], "mysql")
+        self.assertEqual(payload["latest_successful_cursor"], "100")
+        self.assertEqual(payload["latest_batch"]["rows_read"], 10)
 
 
 if __name__ == "__main__":

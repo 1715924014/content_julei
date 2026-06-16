@@ -256,6 +256,29 @@ class Storage:
             return ""
         return str(row["cursor_end"] or "")
 
+    def get_import_status_summary(self, source_name: str) -> dict[str, Any]:
+        latest_batch = self.connection.execute(
+            """
+            SELECT batch_id, source_name, status, cursor_start, cursor_end,
+                started_at, finished_at, rows_read, rows_created, rows_skipped,
+                rows_failed, error_summary
+            FROM import_batches
+            WHERE source_name = ?
+            ORDER BY batch_id DESC
+            LIMIT 1
+            """,
+            (source_name,),
+        ).fetchone()
+        return {
+            "source_name": source_name,
+            "latest_successful_cursor": self.get_latest_successful_cursor(source_name),
+            "latest_batch": dict(latest_batch) if latest_batch is not None else None,
+            "table_counts": {
+                table_name: self.count_table(table_name)
+                for table_name in sorted(COUNTABLE_TABLES)
+            },
+        }
+
     def upsert_source_suggestion(self, row: dict[str, Any], import_batch_id: int | None = None) -> bool:
         source_suggestion_id = str(row.get("source_suggestion_id", "")).strip()
         if not source_suggestion_id:

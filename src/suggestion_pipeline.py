@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sqlite3
 from collections import Counter
+from contextlib import closing
 from pathlib import Path
 from typing import Iterable
 
@@ -230,6 +232,10 @@ def build_parser() -> argparse.ArgumentParser:
     init_db_parser = subparsers.add_parser("init-db", help="Initialize incremental import database")
     init_db_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
 
+    status_parser = subparsers.add_parser("status", help="Print import status summary as JSON")
+    status_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    status_parser.add_argument("--source", default="mysql", help="Import source name")
+
     import_csv_parser = subparsers.add_parser("import-csv", help="Import suggestions CSV incrementally")
     import_csv_parser.add_argument("--input", required=True, type=Path, help="Suggestions CSV input path")
     import_csv_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
@@ -270,12 +276,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "init-db":
         args.db.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(args.db) as connection:
+        with closing(sqlite3.connect(args.db)) as connection:
             Storage(connection).initialize_schema()
         print(f"Initialized database: {args.db}")
         return 0
+    if args.command == "status":
+        with closing(sqlite3.connect(args.db)) as connection:
+            storage = Storage(connection)
+            storage.initialize_schema()
+            summary = storage.get_import_status_summary(args.source)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
     if args.command == "import-csv":
-        with sqlite3.connect(args.db) as connection:
+        with closing(sqlite3.connect(args.db)) as connection:
             storage = Storage(connection)
             storage.initialize_schema()
             result = run_csv_import_batch(storage, args.input)

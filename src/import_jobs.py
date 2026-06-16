@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from src.batch import BatchResult, run_rows_import_batch
@@ -18,7 +19,7 @@ def import_mysql_batch(
     limit: int | None = None,
 ) -> BatchResult:
     config = load_app_config(config_path)
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         storage = Storage(connection)
         storage.initialize_schema()
         cursor_start = cursor_override

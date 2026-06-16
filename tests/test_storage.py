@@ -95,6 +95,53 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(storage.get_latest_successful_cursor("mysql"), "100")
         self.assertEqual(storage.get_latest_successful_cursor("missing"), "")
 
+    def test_import_status_summary_reports_latest_batch_cursor_and_counts(self):
+        storage = self.make_storage()
+        first = storage.start_import_batch("mysql", cursor_start="0")
+        storage.finish_import_batch(
+            first,
+            "100",
+            rows_read=10,
+            rows_created=10,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+        second = storage.start_import_batch("mysql", cursor_start="100")
+        storage.finish_import_batch(
+            second,
+            "125",
+            rows_read=25,
+            rows_created=20,
+            rows_skipped=4,
+            rows_failed=1,
+            error_summary="1 row missing raw_text",
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "M001",
+                "submit_date": "2026-06-16",
+                "created_at": "2026-06-16",
+                "raw_text": "夜班食堂没有热饭",
+                "department": "生产一部",
+                "job_group": "一线",
+                "work_location": "A厂区",
+                "scenario": "食堂",
+                "status": "待识别",
+                "owner_department": "",
+            }
+        )
+
+        summary = storage.get_import_status_summary("mysql")
+
+        self.assertEqual(summary["source_name"], "mysql")
+        self.assertEqual(summary["latest_batch"]["batch_id"], second)
+        self.assertEqual(summary["latest_batch"]["status"], "partial")
+        self.assertEqual(summary["latest_batch"]["cursor_start"], "100")
+        self.assertEqual(summary["latest_batch"]["cursor_end"], "125")
+        self.assertEqual(summary["latest_successful_cursor"], "100")
+        self.assertEqual(summary["table_counts"]["import_batches"], 2)
+        self.assertEqual(summary["table_counts"]["source_suggestions"], 1)
+
     def test_source_suggestion_upsert_is_idempotent_for_same_classification_fields(self):
         storage = self.make_storage()
         row = {
