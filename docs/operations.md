@@ -96,10 +96,12 @@ python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.jso
 执行备份：
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File scripts/backup_analysis.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -DbPath data\analysis.db -LogDir logs -BackupRoot backups
+powershell.exe -ExecutionPolicy Bypass -File scripts/backup_analysis.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -DbPath data\analysis.db -LogDir logs -BackupRoot backups -RetentionDays 90
 ```
 
-备份会在 `backups/yyyyMMdd-HHmmss/` 下保存 `analysis.db` 和 `logs`。恢复时先停止每日任务，再把备份目录里的 `analysis.db` 复制回 `data/analysis.db`，随后运行：
+备份会在 `backups/yyyyMMdd-HHmmss/` 下保存 `analysis.db` 和 `logs`，并默认清理超过 `RetentionDays` 天的旧备份目录。需要暂时关闭自动清理时，可以传入 `-RetentionDays 0`。
+
+恢复时先停止每日任务，再把备份目录里的 `analysis.db` 复制回 `data/analysis.db`，随后运行：
 
 ```powershell
 python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
