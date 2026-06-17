@@ -11,6 +11,7 @@ from typing import Iterable
 
 from src.batch import run_csv_import_batch
 from src.classification import all_category_keywords, classify_suggestion, detect_quality_type, detect_urgency
+from src.doctor import run_doctor_checks
 from src.domain import ANALYSIS_FIELDS, INPUT_FIELDS, STATUS_TO_ANALYZE, Cluster, Suggestion
 from src.import_jobs import import_mysql_batch, run_daily_mysql_job
 from src.reporting import action_item_rows, build_weekly_report, cluster_output_rows, suggestion_output_rows
@@ -232,6 +233,10 @@ def build_parser() -> argparse.ArgumentParser:
     init_db_parser = subparsers.add_parser("init-db", help="Initialize incremental import database")
     init_db_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
 
+    doctor_parser = subparsers.add_parser("doctor", help="Run local deployment preflight checks")
+    doctor_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
+    doctor_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+
     status_parser = subparsers.add_parser("status", help="Print import status summary as JSON")
     status_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     status_parser.add_argument("--source", default="mysql", help="Import source name")
@@ -280,6 +285,10 @@ def main(argv: list[str] | None = None) -> int:
             Storage(connection).initialize_schema()
         print(f"Initialized database: {args.db}")
         return 0
+    if args.command == "doctor":
+        report = run_doctor_checks(config_path=args.config, db_path=args.db)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["status"] == "success" else 1
     if args.command == "status":
         with closing(sqlite3.connect(args.db)) as connection:
             storage = Storage(connection)

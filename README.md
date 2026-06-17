@@ -65,6 +65,12 @@ python -m unittest discover -s tests
 python -m src.suggestion_pipeline init-db --db output_run_check/analysis.db
 ```
 
+部署前预检配置、密码环境变量和分析库初始化：
+
+```powershell
+python -m src.suggestion_pipeline doctor --config config/mysql.example.json --db output_run_check/analysis.db
+```
+
 导入 CSV 到分析数据库：
 
 ```powershell

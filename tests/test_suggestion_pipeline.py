@@ -156,6 +156,26 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(payload["latest_successful_cursor"], "100")
         self.assertEqual(payload["latest_batch"]["rows_read"], 10)
 
+    def test_doctor_outputs_report_and_returns_failure_for_failed_checks(self):
+        with patch(
+            "src.suggestion_pipeline.run_doctor_checks",
+            return_value={
+                "status": "failed",
+                "checks": {"config_loaded": True, "password_env_present": False},
+                "issues": ["MINI_PROGRAM_DB_PASSWORD is missing"],
+            },
+        ) as doctor:
+            from src.suggestion_pipeline import main
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(["doctor", "--config", "config.json", "--db", "analysis.db"])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(payload["status"], "failed")
+        doctor.assert_called_once_with(config_path=Path("config.json"), db_path=Path("analysis.db"))
+
 
 if __name__ == "__main__":
     unittest.main()

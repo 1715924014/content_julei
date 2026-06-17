@@ -19,6 +19,14 @@ python -m pip install -r requirements.txt
 python -m src.suggestion_pipeline init-db --db data/analysis.db
 ```
 
+6. 运行本地预检，确认配置、密码环境变量和分析库可用：
+
+```powershell
+python -m src.suggestion_pipeline doctor --config config\mysql.prod.json --db data\analysis.db
+```
+
+预检返回 `success` 才进入任务计划配置；如果返回 `failed`，先按 `issues` 修复。
+
 ## 每日运行
 
 Windows 任务计划程序建议调用脚本入口：
