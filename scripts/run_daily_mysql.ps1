@@ -15,6 +15,13 @@ if (-not $env:MINI_PROGRAM_DB_PASSWORD) {
 
 Set-Location $ProjectRoot
 
+& $PythonCommand -m src.suggestion_pipeline doctor `
+    --config $ConfigPath `
+    --db $DbPath
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
 & $PythonCommand -m src.suggestion_pipeline run-daily-mysql `
     --config $ConfigPath `
     --db $DbPath `

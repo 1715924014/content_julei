@@ -9,9 +9,11 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertTrue(script_path.exists())
         content = script_path.read_text(encoding="utf-8")
         self.assertIn("$ErrorActionPreference = \"Stop\"", content)
+        self.assertIn("doctor", content)
         self.assertIn("run-daily-mysql", content)
         self.assertIn("exit $LASTEXITCODE", content)
         self.assertIn("MINI_PROGRAM_DB_PASSWORD", content)
+        self.assertLess(content.index("doctor"), content.index("run-daily-mysql"))
 
     def test_backup_script_copies_database_and_logs(self):
         script_path = Path("scripts/backup_analysis.ps1")

@@ -38,10 +38,11 @@ powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -Projec
 脚本内部会调用：
 
 ```powershell
+python -m src.suggestion_pipeline doctor --config config\mysql.prod.json --db data\analysis.db
 python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.json --db data\analysis.db --log-dir logs --limit 10000
 ```
 
-任务成功时退出码为 `0`；失败时退出码为 `1`，并在 `logs` 目录写入 `daily-mysql-*.json` 日志。
+脚本会先运行 `doctor`，预检失败时直接返回非 0，不继续导入。任务成功时退出码为 `0`；导入失败时退出码为 `1`，并在 `logs` 目录写入 `daily-mysql-*.json` 日志。
 
 ## 运行后检查
 
@@ -66,10 +67,11 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 
 1. 先查看 Windows 任务计划程序的最近运行结果，确认是否为非 0 退出码。
 2. 打开最新的 `logs/daily-mysql-*.json`，查看 `status` 和 `error`。
-3. 如果错误与密码有关，确认运行账号下存在 `MINI_PROGRAM_DB_PASSWORD`。
-4. 如果错误与 MySQL 字段有关，核对生产配置中的 `field_mapping` 和 `cursor_field`。
-5. 如果 `rows_failed` 大于 0，查看 `latest_batch.error_summary`，确认是否存在空文本、缺失 ID 或字段格式异常。
-6. 修复源数据或配置后，重新运行每日任务脚本。
+3. 如果任务在导入前失败，先查看 `doctor` 输出，确认配置、字段映射、密码环境变量和分析库可用。
+4. 如果错误与密码有关，确认运行账号下存在 `MINI_PROGRAM_DB_PASSWORD`。
+5. 如果错误与 MySQL 字段有关，核对生产配置中的 `field_mapping` 和 `cursor_field`。
+6. 如果 `rows_failed` 大于 0，查看 `latest_batch.error_summary`，确认是否存在空文本、缺失 ID 或字段格式异常。
+7. 修复源数据或配置后，重新运行每日任务脚本。
 
 ## 补数和恢复
 
