@@ -11,7 +11,7 @@
 python -m pip install -r requirements.txt
 ```
 
-3. 复制 `config/mysql.example.json` 为生产私有配置文件，并确认 `field_mapping` 与小程序 MySQL 表字段一致。
+3. 复制 `config/mysql.example.json` 为生产私有配置文件，并确认 `field_mapping` 与小程序 MySQL 表字段一致。建议命名为 `config/mysql.prod.json`；`config/*.prod.json` 和 `config/*.local.json` 默认会被 Git 忽略。
 4. 在运行账号下配置 `MINI_PROGRAM_DB_PASSWORD` 环境变量，密码不要写入 Git 或配置文件。
 5. 初始化分析库：
 

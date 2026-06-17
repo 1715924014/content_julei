@@ -10,6 +10,13 @@ class GitIgnoreTests(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 self.assertIn(pattern, content)
 
+    def test_private_config_files_are_ignored(self):
+        content = Path(".gitignore").read_text(encoding="utf-8")
+
+        for pattern in ["config/*.prod.json", "config/*.local.json"]:
+            with self.subTest(pattern=pattern):
+                self.assertIn(pattern, content)
+
 
 if __name__ == "__main__":
     unittest.main()
