@@ -22,6 +22,8 @@ python -m src.suggestion_pipeline analyze --input examples/sample_suggestions.cs
 python -m unittest discover -s tests
 ```
 
+推送到 GitHub 后，`.github/workflows/tests.yml` 会自动运行同一套单元测试。
+
 ## 输入字段
 
 输入 CSV 至少应包含这些字段：
