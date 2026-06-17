@@ -92,3 +92,17 @@ python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.jso
 - 每天检查 `status` 输出中的 `rows_failed` 是否为 `0`。
 - 每周抽查 `review_tasks` 和低置信度聚类，避免相似问题被错误合并。
 - 每月备份 `data/analysis.db` 和 `logs` 目录。
+
+执行备份：
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts/backup_analysis.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -DbPath data\analysis.db -LogDir logs -BackupRoot backups
+```
+
+备份会在 `backups/yyyyMMdd-HHmmss/` 下保存 `analysis.db` 和 `logs`。恢复时先停止每日任务，再把备份目录里的 `analysis.db` 复制回 `data/analysis.db`，随后运行：
+
+```powershell
+python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
+```
+
+确认 `latest_successful_cursor` 和核心表数量符合预期后，再恢复每日任务。

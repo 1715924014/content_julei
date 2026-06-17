@@ -108,4 +108,10 @@ powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -Projec
 python -m src.suggestion_pipeline status --db output_run_check/analysis.db --source mysql
 ```
 
+备份分析库和运行日志：
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts/backup_analysis.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -DbPath data\analysis.db -LogDir logs -BackupRoot backups
+```
+
 部署检查、每日巡检、失败处理和补数恢复请参考 `docs/operations.md`。

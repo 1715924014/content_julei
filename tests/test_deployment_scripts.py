@@ -13,6 +13,17 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("exit $LASTEXITCODE", content)
         self.assertIn("MINI_PROGRAM_DB_PASSWORD", content)
 
+    def test_backup_script_copies_database_and_logs(self):
+        script_path = Path("scripts/backup_analysis.ps1")
+
+        self.assertTrue(script_path.exists())
+        content = script_path.read_text(encoding="utf-8")
+        self.assertIn("$ErrorActionPreference = \"Stop\"", content)
+        self.assertIn("analysis.db", content)
+        self.assertIn("Copy-Item", content)
+        self.assertIn("logs", content)
+        self.assertIn("exit 0", content)
+
 
 if __name__ == "__main__":
     unittest.main()
