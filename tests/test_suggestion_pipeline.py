@@ -198,6 +198,103 @@ class SuggestionPipelineTests(unittest.TestCase):
             self.assertEqual(rows[0]["raw_text"], "Night shift canteen meals are cold")
             self.assertEqual(rows[0]["priority"], "90")
             self.assertEqual(rows[0]["candidate_cluster_name"], "")
+            self.assertEqual(rows[0]["review_result"], "")
+            self.assertEqual(rows[0]["target_cluster_id"], "")
+            self.assertEqual(rows[0]["reviewed_by"], "")
+
+    def test_import_review_results_applies_csv_decisions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            review_path = Path(directory) / "review_results.csv"
+            with closing(sqlite3.connect(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                storage.upsert_source_suggestion(
+                    {
+                        "source_suggestion_id": "S001",
+                        "submit_date": "2026-06-01",
+                        "created_at": "2026-06-01",
+                        "raw_text": "Night shift canteen meals are cold",
+                        "department": "Production",
+                        "job_group": "Operator",
+                        "work_location": "Plant A",
+                        "scenario": "Canteen",
+                        "status": "new",
+                        "owner_department": "Facilities",
+                    }
+                )
+                storage.upsert_source_suggestion(
+                    {
+                        "source_suggestion_id": "S002",
+                        "submit_date": "2026-06-02",
+                        "created_at": "2026-06-02",
+                        "raw_text": "Night shift needs hot meals",
+                        "department": "Production",
+                        "job_group": "Operator",
+                        "work_location": "Plant A",
+                        "scenario": "Canteen",
+                        "status": "new",
+                        "owner_department": "Facilities",
+                    }
+                )
+                cluster_id = storage.create_issue_cluster(
+                    source_suggestion_id="S001",
+                    normalized_text="Night shift canteen meals are cold",
+                    primary_category="Logistics",
+                    secondary_category="Canteen",
+                    owner_department="Facilities",
+                    scenario_key="canteen",
+                    centroid_embedding=[0.1, 0.2, 0.3],
+                )
+                storage.add_cluster_member(
+                    cluster_id=cluster_id,
+                    source_suggestion_id="S002",
+                    decision_type="manual_review",
+                    vector_score=0.74,
+                    keyword_score=0.5,
+                    final_score=0.72,
+                    decision_status="pending",
+                    decision_reason="score_above_manual_review_threshold",
+                )
+                storage.create_review_task(
+                    source_suggestion_id="S002",
+                    candidate_cluster_id=cluster_id,
+                    task_type="cluster_match",
+                    priority=1,
+                    evidence={"final_score": 0.72},
+                )
+                review_task_id = storage.list_pending_review_tasks()[0]["review_task_id"]
+            with review_path.open("w", encoding="utf-8-sig", newline="") as file:
+                writer = csv.DictWriter(file, fieldnames=["review_task_id", "review_result", "reviewed_by"])
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "review_task_id": str(review_task_id),
+                        "review_result": "approve",
+                        "reviewed_by": "ops-user",
+                    }
+                )
+
+            from src.suggestion_pipeline import main
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(["import-review-results", "--db", str(db_path), "--input", str(review_path)])
+
+            with closing(sqlite3.connect(db_path)) as connection:
+                connection.row_factory = sqlite3.Row
+                member = connection.execute(
+                    """
+                    SELECT decision_status, reviewed_by
+                    FROM cluster_members
+                    WHERE cluster_id = ? AND source_suggestion_id = ?
+                    """,
+                    (cluster_id, "S002"),
+                ).fetchone()
+            self.assertEqual(exit_code, 0)
+            self.assertIn("applied=1", output.getvalue())
+            self.assertEqual(member["decision_status"], "accepted")
+            self.assertEqual(member["reviewed_by"], "ops-user")
 
     def test_doctor_outputs_report_and_returns_failure_for_failed_checks(self):
         with patch(

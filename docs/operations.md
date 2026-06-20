@@ -98,6 +98,12 @@ python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.jso
 python -m src.suggestion_pipeline export-review-tasks --db data/analysis.db --output data/review_tasks.csv
 ```
 
+复核人员在 CSV 中填写 `review_result` 后导回系统。`approve` 表示确认合并，`reject` 表示拒绝候选簇，`assign` 需要填写 `target_cluster_id`，`create_new` 表示新建问题簇：
+
+```powershell
+python -m src.suggestion_pipeline import-review-results --db data/analysis.db --input data/review_tasks.csv
+```
+
 - 每月备份 `data/analysis.db` 和 `logs` 目录。
 
 执行备份：

@@ -116,6 +116,17 @@ python -m src.suggestion_pipeline status --db output_run_check/analysis.db --sou
 python -m src.suggestion_pipeline export-review-tasks --db output_run_check/analysis.db --output output_run_check/review_tasks.csv
 ```
 
+在 `review_tasks.csv` 中填写 `review_result` 后导回。常用值：
+
+- `approve`：确认合并到候选问题簇。
+- `reject`：拒绝候选问题簇，避免错误合并。
+- `assign`：改派到 `target_cluster_id` 指定的问题簇。
+- `create_new`：作为新的问题簇处理。
+
+```powershell
+python -m src.suggestion_pipeline import-review-results --db output_run_check/analysis.db --input output_run_check/review_tasks.csv
+```
+
 备份分析库和运行日志：
 
 ```powershell

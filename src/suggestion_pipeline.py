@@ -34,6 +34,9 @@ REVIEW_TASK_EXPORT_FIELDS = [
     "scenario",
     "owner_department",
     "evidence_json",
+    "review_result",
+    "target_cluster_id",
+    "reviewed_by",
     "created_at",
 ]
 
@@ -255,6 +258,38 @@ def export_review_tasks(db_path: Path, output: Path) -> int:
     return len(rows)
 
 
+def import_review_results(db_path: Path, input_path: Path) -> dict[str, int]:
+    with input_path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+        required_fields = {"review_task_id", "review_result"}
+        missing = sorted(required_fields - set(reader.fieldnames or []))
+        if missing:
+            raise ValueError(f"review result file missing fields: {', '.join(missing)}")
+        rows = list(reader)
+
+    summary = {"applied": 0, "skipped": 0, "failed": 0}
+    with closing(sqlite3.connect(db_path)) as connection:
+        storage = Storage(connection)
+        storage.initialize_schema()
+        for row in rows:
+            review_result = (row.get("review_result") or "").strip()
+            if not review_result:
+                summary["skipped"] += 1
+                continue
+            try:
+                storage.apply_review_task_result(
+                    review_task_id=int(row.get("review_task_id") or "0"),
+                    review_result=review_result,
+                    reviewed_by=(row.get("reviewed_by") or "").strip(),
+                    target_cluster_id=(row.get("target_cluster_id") or "").strip() or None,
+                )
+            except (KeyError, TypeError, ValueError):
+                summary["failed"] += 1
+            else:
+                summary["applied"] += 1
+    return summary
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="员工建议分类聚类与整改闭环工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -279,6 +314,10 @@ def build_parser() -> argparse.ArgumentParser:
     export_review_parser = subparsers.add_parser("export-review-tasks", help="Export pending review tasks to CSV")
     export_review_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     export_review_parser.add_argument("--output", required=True, type=Path, help="Pending review tasks CSV output path")
+
+    import_review_parser = subparsers.add_parser("import-review-results", help="Import reviewed task decisions from CSV")
+    import_review_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    import_review_parser.add_argument("--input", required=True, type=Path, help="Reviewed task decisions CSV input path")
 
     import_csv_parser = subparsers.add_parser("import-csv", help="Import suggestions CSV incrementally")
     import_csv_parser.add_argument("--input", required=True, type=Path, help="Suggestions CSV input path")
@@ -339,6 +378,13 @@ def main(argv: list[str] | None = None) -> int:
         exported = export_review_tasks(args.db, args.output)
         print(f"Exported pending review tasks: {exported} -> {args.output}")
         return 0
+    if args.command == "import-review-results":
+        summary = import_review_results(args.db, args.input)
+        print(
+            "Imported review results: "
+            f"applied={summary['applied']}, skipped={summary['skipped']}, failed={summary['failed']}"
+        )
+        return 0 if summary["failed"] == 0 else 1
     if args.command == "import-csv":
         with closing(sqlite3.connect(args.db)) as connection:
             storage = Storage(connection)

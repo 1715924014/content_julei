@@ -244,6 +244,289 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(task["scenario"], "Canteen")
         self.assertEqual(json.loads(task["evidence_json"])["final_score"], 0.72)
 
+    def test_apply_review_task_result_approves_pending_cluster_member_and_updates_count(self):
+        storage = self.make_storage()
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "Night shift canteen meals are cold",
+                "department": "Production",
+                "job_group": "Operator",
+                "work_location": "Plant A",
+                "scenario": "Canteen",
+                "status": "new",
+                "owner_department": "Facilities",
+            }
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S002",
+                "submit_date": "2026-06-02",
+                "created_at": "2026-06-02",
+                "raw_text": "Night shift needs hot meals",
+                "department": "Production",
+                "job_group": "Operator",
+                "work_location": "Plant A",
+                "scenario": "Canteen",
+                "status": "new",
+                "owner_department": "Facilities",
+            }
+        )
+        cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="Night shift canteen meals are cold",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            scenario_key="canteen",
+            centroid_embedding=[0.1, 0.2, 0.3],
+        )
+        storage.add_cluster_member(
+            cluster_id=cluster_id,
+            source_suggestion_id="S002",
+            decision_type="manual_review",
+            vector_score=0.74,
+            keyword_score=0.5,
+            final_score=0.72,
+            decision_status="pending",
+            decision_reason="score_above_manual_review_threshold",
+        )
+        storage.create_review_task(
+            source_suggestion_id="S002",
+            candidate_cluster_id=cluster_id,
+            task_type="cluster_match",
+            priority=1,
+            evidence={"final_score": 0.72},
+        )
+        review_task_id = storage.list_pending_review_tasks()[0]["review_task_id"]
+
+        storage.apply_review_task_result(
+            review_task_id=review_task_id,
+            review_result="approve",
+            reviewed_by="ops-user",
+        )
+
+        member = storage.connection.execute(
+            """
+            SELECT decision_status, reviewed_by, reviewed_at
+            FROM cluster_members
+            WHERE cluster_id = ? AND source_suggestion_id = ?
+            """,
+            (cluster_id, "S002"),
+        ).fetchone()
+        task = storage.connection.execute("SELECT status, review_result FROM review_tasks").fetchone()
+        cluster = storage.get_issue_cluster(cluster_id)
+        self.assertEqual(member["decision_status"], "accepted")
+        self.assertEqual(member["reviewed_by"], "ops-user")
+        self.assertIsNotNone(member["reviewed_at"])
+        self.assertEqual(task["status"], "reviewed")
+        self.assertEqual(task["review_result"], "approve")
+        self.assertEqual(cluster["suggestion_count"], 2)
+
+    def test_apply_review_task_result_rejects_candidate_cluster_member(self):
+        storage = self.make_storage()
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "Dorm toilet smells bad",
+                "department": "Production",
+                "scenario": "Dorm",
+            }
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S002",
+                "submit_date": "2026-06-02",
+                "created_at": "2026-06-02",
+                "raw_text": "Workshop dust masks are not enough",
+                "department": "Production",
+                "scenario": "Safety",
+            }
+        )
+        cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="Dorm toilet smells bad",
+            primary_category="Logistics",
+            secondary_category="Dorm hygiene",
+            owner_department="Facilities",
+            scenario_key="dorm",
+            centroid_embedding=[0.1, 0.2],
+        )
+        storage.add_cluster_member(
+            cluster_id=cluster_id,
+            source_suggestion_id="S002",
+            decision_type="manual_review",
+            vector_score=0.73,
+            keyword_score=0.2,
+            final_score=0.72,
+            decision_status="pending",
+            decision_reason="score_above_manual_review_threshold",
+        )
+        storage.create_review_task(
+            source_suggestion_id="S002",
+            candidate_cluster_id=cluster_id,
+            task_type="cluster_match",
+            priority=1,
+            evidence={"final_score": 0.72},
+        )
+        review_task_id = storage.list_pending_review_tasks()[0]["review_task_id"]
+
+        storage.apply_review_task_result(
+            review_task_id=review_task_id,
+            review_result="reject",
+            reviewed_by="ops-user",
+        )
+
+        member = storage.connection.execute("SELECT decision_status FROM cluster_members WHERE source_suggestion_id = ?", ("S002",)).fetchone()
+        task = storage.connection.execute("SELECT status, review_result FROM review_tasks").fetchone()
+        cluster = storage.get_issue_cluster(cluster_id)
+        self.assertEqual(member["decision_status"], "rejected")
+        self.assertEqual(task["status"], "reviewed")
+        self.assertEqual(task["review_result"], "reject")
+        self.assertEqual(cluster["suggestion_count"], 1)
+
+    def test_apply_review_task_result_assigns_to_target_cluster(self):
+        storage = self.make_storage()
+        for suggestion_id, raw_text, scenario in [
+            ("S001", "Dorm toilet smells bad", "Dorm"),
+            ("S002", "Workshop dust masks are not enough", "Safety"),
+            ("S003", "Masks are insufficient near dusty line", "Safety"),
+        ]:
+            storage.upsert_source_suggestion(
+                {
+                    "source_suggestion_id": suggestion_id,
+                    "submit_date": "2026-06-01",
+                    "created_at": "2026-06-01",
+                    "raw_text": raw_text,
+                    "department": "Production",
+                    "scenario": scenario,
+                }
+            )
+        candidate_cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="Dorm toilet smells bad",
+            primary_category="Logistics",
+            secondary_category="Dorm hygiene",
+            owner_department="Facilities",
+            scenario_key="dorm",
+            centroid_embedding=[0.1, 0.2],
+        )
+        target_cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S003",
+            normalized_text="Masks are insufficient near dusty line",
+            primary_category="Safety",
+            secondary_category="Labor protection",
+            owner_department="Safety",
+            scenario_key="safety",
+            centroid_embedding=[0.3, 0.4],
+        )
+        storage.add_cluster_member(
+            cluster_id=candidate_cluster_id,
+            source_suggestion_id="S002",
+            decision_type="manual_review",
+            vector_score=0.73,
+            keyword_score=0.2,
+            final_score=0.72,
+            decision_status="pending",
+            decision_reason="score_above_manual_review_threshold",
+        )
+        storage.create_review_task(
+            source_suggestion_id="S002",
+            candidate_cluster_id=candidate_cluster_id,
+            task_type="cluster_match",
+            priority=1,
+            evidence={"final_score": 0.72},
+        )
+        review_task_id = storage.list_pending_review_tasks()[0]["review_task_id"]
+
+        storage.apply_review_task_result(
+            review_task_id=review_task_id,
+            review_result="assign",
+            reviewed_by="ops-user",
+            target_cluster_id=target_cluster_id,
+        )
+
+        candidate_member = storage.connection.execute(
+            "SELECT decision_status FROM cluster_members WHERE cluster_id = ? AND source_suggestion_id = ?",
+            (candidate_cluster_id, "S002"),
+        ).fetchone()
+        target_member = storage.connection.execute(
+            "SELECT decision_status, decision_type FROM cluster_members WHERE cluster_id = ? AND source_suggestion_id = ?",
+            (target_cluster_id, "S002"),
+        ).fetchone()
+        self.assertEqual(candidate_member["decision_status"], "rejected")
+        self.assertEqual(target_member["decision_status"], "accepted")
+        self.assertEqual(target_member["decision_type"], "manual_reassign")
+        self.assertEqual(storage.get_issue_cluster(candidate_cluster_id)["suggestion_count"], 1)
+        self.assertEqual(storage.get_issue_cluster(target_cluster_id)["suggestion_count"], 2)
+
+    def test_apply_review_task_result_creates_new_cluster_from_reviewed_source(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="0")
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "Workshop dust masks are not enough",
+                "department": "Production",
+                "job_group": "Operator",
+                "work_location": "Plant A",
+                "scenario": "Safety",
+                "status": "new",
+                "owner_department": "Safety",
+            },
+            import_batch_id=batch_id,
+        )
+        storage.upsert_suggestion_analysis(
+            {
+                "source_suggestion_id": "S001",
+                "batch_id": batch_id,
+                "normalized_text": "workshop dust masks are not enough",
+                "content_hash": "hash-001",
+                "primary_category": "Safety",
+                "secondary_category": "Labor protection",
+                "owner_department": "Safety",
+                "quality_type": "normal",
+                "urgency_level": "medium",
+                "classification_confidence": 0.8,
+                "embedding_status": "ready",
+                "embedding_model": "test",
+                "embedding_ref": json.dumps([0.3, 0.4]),
+                "review_required": "yes",
+                "analysis_status": "analyzed",
+            }
+        )
+        storage.create_review_task(
+            source_suggestion_id="S001",
+            candidate_cluster_id=None,
+            task_type="cluster_match",
+            priority=1,
+            evidence={"reason": "no suitable candidate"},
+        )
+        review_task_id = storage.list_pending_review_tasks()[0]["review_task_id"]
+
+        result = storage.apply_review_task_result(
+            review_task_id=review_task_id,
+            review_result="create_new",
+            reviewed_by="ops-user",
+        )
+
+        member = storage.connection.execute(
+            "SELECT cluster_id, decision_status, decision_type FROM cluster_members WHERE source_suggestion_id = ?",
+            ("S001",),
+        ).fetchone()
+        cluster = storage.get_issue_cluster(result["cluster_id"])
+        self.assertEqual(member["cluster_id"], result["cluster_id"])
+        self.assertEqual(member["decision_status"], "accepted")
+        self.assertEqual(member["decision_type"], "create_new_cluster")
+        self.assertEqual(cluster["secondary_category"], "Labor protection")
+        self.assertEqual(cluster["suggestion_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -677,6 +677,272 @@ class Storage:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def apply_review_task_result(
+        self,
+        *,
+        review_task_id: int,
+        review_result: str,
+        reviewed_by: str = "",
+        target_cluster_id: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_result = review_result.strip().lower().replace("-", "_")
+        aliases = {
+            "approved": "approve",
+            "accept": "approve",
+            "accepted": "approve",
+            "rejected": "reject",
+            "new": "create_new",
+            "new_cluster": "create_new",
+            "create_new_cluster": "create_new",
+            "reassign": "assign",
+            "manual_reassign": "assign",
+        }
+        normalized_result = aliases.get(normalized_result, normalized_result)
+        if normalized_result not in {"approve", "reject", "assign", "create_new"}:
+            raise ValueError(f"unsupported review_result: {review_result}")
+
+        task = self.connection.execute(
+            """
+            SELECT
+                rt.review_task_id,
+                rt.source_suggestion_id,
+                rt.candidate_cluster_id,
+                rt.status,
+                ss.raw_text,
+                ss.scenario,
+                ss.owner_department AS source_owner_department,
+                sa.normalized_text,
+                sa.primary_category,
+                sa.secondary_category,
+                sa.owner_department AS analysis_owner_department,
+                sa.embedding_ref
+            FROM review_tasks rt
+            JOIN source_suggestions ss
+                ON ss.source_suggestion_id = rt.source_suggestion_id
+            LEFT JOIN suggestion_analysis sa
+                ON sa.source_suggestion_id = rt.source_suggestion_id
+            WHERE rt.review_task_id = ?
+            """,
+            (review_task_id,),
+        ).fetchone()
+        if task is None:
+            raise KeyError(f"unknown review task: {review_task_id}")
+        if task["status"] != "pending":
+            raise ValueError(f"review task is not pending: {review_task_id}")
+
+        source_suggestion_id = task["source_suggestion_id"]
+        candidate_cluster_id = task["candidate_cluster_id"]
+        affected_cluster_ids: set[str] = set()
+        accepted_cluster_id: str | None = None
+
+        if normalized_result == "approve":
+            if not candidate_cluster_id:
+                raise ValueError("approve requires candidate_cluster_id")
+            self.get_issue_cluster(candidate_cluster_id)
+            self._upsert_reviewed_cluster_member(
+                cluster_id=candidate_cluster_id,
+                source_suggestion_id=source_suggestion_id,
+                decision_type="manual_review",
+                decision_status="accepted",
+                decision_reason="review_approved",
+                reviewed_by=reviewed_by,
+            )
+            accepted_cluster_id = candidate_cluster_id
+            affected_cluster_ids.add(candidate_cluster_id)
+
+        if normalized_result == "reject":
+            if candidate_cluster_id:
+                self._upsert_reviewed_cluster_member(
+                    cluster_id=candidate_cluster_id,
+                    source_suggestion_id=source_suggestion_id,
+                    decision_type="manual_review",
+                    decision_status="rejected",
+                    decision_reason="review_rejected",
+                    reviewed_by=reviewed_by,
+                )
+                affected_cluster_ids.add(candidate_cluster_id)
+
+        if normalized_result == "assign":
+            if not target_cluster_id:
+                raise ValueError("assign requires target_cluster_id")
+            self.get_issue_cluster(target_cluster_id)
+            if candidate_cluster_id and candidate_cluster_id != target_cluster_id:
+                self._upsert_reviewed_cluster_member(
+                    cluster_id=candidate_cluster_id,
+                    source_suggestion_id=source_suggestion_id,
+                    decision_type="manual_review",
+                    decision_status="rejected",
+                    decision_reason="review_reassigned",
+                    reviewed_by=reviewed_by,
+                )
+                affected_cluster_ids.add(candidate_cluster_id)
+            self._upsert_reviewed_cluster_member(
+                cluster_id=target_cluster_id,
+                source_suggestion_id=source_suggestion_id,
+                decision_type="manual_reassign",
+                decision_status="accepted",
+                decision_reason="review_assigned",
+                reviewed_by=reviewed_by,
+            )
+            accepted_cluster_id = target_cluster_id
+            affected_cluster_ids.add(target_cluster_id)
+
+        if normalized_result == "create_new":
+            if candidate_cluster_id:
+                self._upsert_reviewed_cluster_member(
+                    cluster_id=candidate_cluster_id,
+                    source_suggestion_id=source_suggestion_id,
+                    decision_type="manual_review",
+                    decision_status="rejected",
+                    decision_reason="review_created_new_cluster",
+                    reviewed_by=reviewed_by,
+                )
+                affected_cluster_ids.add(candidate_cluster_id)
+            centroid_embedding = self._embedding_from_ref(task["embedding_ref"])
+            accepted_cluster_id = self.create_issue_cluster(
+                source_suggestion_id=source_suggestion_id,
+                normalized_text=task["normalized_text"] or task["raw_text"],
+                primary_category=task["primary_category"] or "",
+                secondary_category=task["secondary_category"] or "Manual review",
+                owner_department=task["analysis_owner_department"] or task["source_owner_department"] or "",
+                scenario_key=task["scenario"] or "",
+                centroid_embedding=centroid_embedding,
+            )
+            self._upsert_reviewed_cluster_member(
+                cluster_id=accepted_cluster_id,
+                source_suggestion_id=source_suggestion_id,
+                decision_type="create_new_cluster",
+                decision_status="accepted",
+                decision_reason="review_created_new_cluster",
+                reviewed_by=reviewed_by,
+            )
+            affected_cluster_ids.add(accepted_cluster_id)
+
+        for cluster_id in affected_cluster_ids:
+            self._recalculate_cluster_suggestion_count(cluster_id)
+
+        now = utc_now()
+        self.connection.execute(
+            """
+            UPDATE review_tasks
+            SET status = ?, review_result = ?, reviewed_by = ?, reviewed_at = ?
+            WHERE review_task_id = ?
+            """,
+            ("reviewed", normalized_result, reviewed_by, now, review_task_id),
+        )
+        self.connection.commit()
+        return {
+            "review_task_id": review_task_id,
+            "review_result": normalized_result,
+            "cluster_id": accepted_cluster_id,
+        }
+
+    def _embedding_from_ref(self, embedding_ref: str | None) -> list[float]:
+        try:
+            values = json.loads(embedding_ref or "[]")
+        except json.JSONDecodeError:
+            values = []
+        if not isinstance(values, list):
+            return []
+        return [float(value) for value in values]
+
+    def _upsert_reviewed_cluster_member(
+        self,
+        *,
+        cluster_id: str,
+        source_suggestion_id: str,
+        decision_type: str,
+        decision_status: str,
+        decision_reason: str,
+        reviewed_by: str,
+    ) -> None:
+        now = utc_now()
+        existing = self.connection.execute(
+            """
+            SELECT vector_score, keyword_score, final_score
+            FROM cluster_members
+            WHERE cluster_id = ? AND source_suggestion_id = ?
+            """,
+            (cluster_id, source_suggestion_id),
+        ).fetchone()
+        vector_score = float(existing["vector_score"]) if existing is not None else 0.0
+        keyword_score = float(existing["keyword_score"]) if existing is not None else 0.0
+        final_score = float(existing["final_score"]) if existing is not None else 1.0
+        self.connection.execute(
+            """
+            INSERT INTO cluster_members (
+                cluster_id, source_suggestion_id, decision_type, vector_score,
+                keyword_score, final_score, decision_status, decision_reason,
+                reviewed_by, reviewed_at, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cluster_id, source_suggestion_id) DO UPDATE SET
+                decision_type = excluded.decision_type,
+                vector_score = excluded.vector_score,
+                keyword_score = excluded.keyword_score,
+                final_score = excluded.final_score,
+                decision_status = excluded.decision_status,
+                decision_reason = excluded.decision_reason,
+                reviewed_by = excluded.reviewed_by,
+                reviewed_at = excluded.reviewed_at
+            """,
+            (
+                cluster_id,
+                source_suggestion_id,
+                decision_type,
+                vector_score,
+                keyword_score,
+                final_score,
+                decision_status,
+                decision_reason,
+                reviewed_by,
+                now,
+                now,
+            ),
+        )
+
+    def _recalculate_cluster_suggestion_count(self, cluster_id: str) -> None:
+        now = utc_now()
+        row = self.connection.execute(
+            """
+            SELECT representative_suggestion_id
+            FROM issue_clusters
+            WHERE cluster_id = ?
+            """,
+            (cluster_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown issue cluster: {cluster_id}")
+        member_count = self.connection.execute(
+            """
+            SELECT COUNT(*) AS suggestion_count
+            FROM cluster_members
+            WHERE cluster_id = ? AND decision_status = 'accepted'
+            """,
+            (cluster_id,),
+        ).fetchone()
+        representative_member = self.connection.execute(
+            """
+            SELECT 1
+            FROM cluster_members
+            WHERE cluster_id = ?
+                AND source_suggestion_id = ?
+                AND decision_status = 'accepted'
+            """,
+            (cluster_id, row["representative_suggestion_id"]),
+        ).fetchone()
+        suggestion_count = int(member_count["suggestion_count"])
+        if representative_member is None:
+            suggestion_count += 1
+        self.connection.execute(
+            """
+            UPDATE issue_clusters
+            SET suggestion_count = ?, updated_at = ?, last_seen_at = ?
+            WHERE cluster_id = ?
+            """,
+            (suggestion_count, now, now, cluster_id),
+        )
+
     def count_table(self, table_name: str) -> int:
         if table_name not in COUNTABLE_TABLES:
             raise ValueError(f"cannot count unknown table: {table_name}")
