@@ -157,6 +157,84 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(payload["latest_successful_cursor"], "100")
         self.assertEqual(payload["latest_batch"]["rows_read"], 10)
 
+    def test_export_db_results_writes_persisted_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            output_dir = Path(directory) / "reports"
+            with closing(sqlite3.connect(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                batch_id = storage.start_import_batch("mysql", cursor_start="0")
+                storage.upsert_source_suggestion(
+                    {
+                        "source_suggestion_id": "S001",
+                        "submit_date": "2026-06-01",
+                        "created_at": "2026-06-01",
+                        "raw_text": "Night shift canteen meals are cold",
+                        "department": "Production",
+                        "job_group": "Operator",
+                        "work_location": "Plant A",
+                        "scenario": "Canteen",
+                        "status": "new",
+                        "owner_department": "Facilities",
+                    },
+                    import_batch_id=batch_id,
+                )
+                storage.upsert_suggestion_analysis(
+                    {
+                        "source_suggestion_id": "S001",
+                        "batch_id": batch_id,
+                        "normalized_text": "night shift canteen meals are cold",
+                        "content_hash": "hash-001",
+                        "primary_category": "Logistics",
+                        "secondary_category": "Canteen",
+                        "owner_department": "Facilities",
+                        "quality_type": "normal",
+                        "urgency_level": "medium",
+                        "classification_confidence": 0.82,
+                        "embedding_status": "ready",
+                        "embedding_model": "test",
+                        "embedding_ref": json.dumps([0.1, 0.2]),
+                        "review_required": "no",
+                        "analysis_status": "analyzed",
+                    }
+                )
+                cluster_id = storage.create_issue_cluster(
+                    source_suggestion_id="S001",
+                    normalized_text="night shift canteen meals are cold",
+                    primary_category="Logistics",
+                    secondary_category="Canteen",
+                    owner_department="Facilities",
+                    scenario_key="Canteen",
+                    centroid_embedding=[0.1, 0.2],
+                )
+                storage.add_cluster_member(
+                    cluster_id=cluster_id,
+                    source_suggestion_id="S001",
+                    decision_type="create_new_cluster",
+                    vector_score=1.0,
+                    keyword_score=1.0,
+                    final_score=1.0,
+                    decision_status="accepted",
+                    decision_reason="new_cluster",
+                )
+
+            from src.suggestion_pipeline import main
+
+            exit_code = main(["export-db-results", "--db", str(db_path), "--output-dir", str(output_dir)])
+
+            self.assertEqual(exit_code, 0)
+            for filename in ["suggestions_analyzed.csv", "clusters.csv", "action_items.csv", "weekly_report.md"]:
+                self.assertTrue((output_dir / filename).exists(), filename)
+            with (output_dir / "suggestions_analyzed.csv").open("r", encoding="utf-8-sig", newline="") as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(rows[0]["source_suggestion_id"], "S001")
+            self.assertEqual(rows[0]["cluster_id"], cluster_id)
+            with (output_dir / "clusters.csv").open("r", encoding="utf-8-sig", newline="") as file:
+                clusters = list(csv.DictReader(file))
+            self.assertEqual(clusters[0]["suggestion_count"], "1")
+            self.assertIn("Persisted Analysis Report", (output_dir / "weekly_report.md").read_text(encoding="utf-8-sig"))
+
     def test_export_review_tasks_writes_pending_tasks_to_csv(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "analysis.db"

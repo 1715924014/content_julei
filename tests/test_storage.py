@@ -244,6 +244,75 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(task["scenario"], "Canteen")
         self.assertEqual(json.loads(task["evidence_json"])["final_score"], 0.72)
 
+    def test_list_persisted_export_rows_include_analysis_and_cluster_summaries(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="0")
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "Night shift canteen meals are cold",
+                "department": "Production",
+                "job_group": "Operator",
+                "work_location": "Plant A",
+                "scenario": "Canteen",
+                "status": "new",
+                "owner_department": "Facilities",
+            },
+            import_batch_id=batch_id,
+        )
+        storage.upsert_suggestion_analysis(
+            {
+                "source_suggestion_id": "S001",
+                "batch_id": batch_id,
+                "normalized_text": "night shift canteen meals are cold",
+                "content_hash": "hash-001",
+                "primary_category": "Logistics",
+                "secondary_category": "Canteen",
+                "owner_department": "Facilities",
+                "quality_type": "normal",
+                "urgency_level": "medium",
+                "classification_confidence": 0.82,
+                "embedding_status": "ready",
+                "embedding_model": "test",
+                "embedding_ref": json.dumps([0.1, 0.2]),
+                "review_required": "no",
+                "analysis_status": "analyzed",
+            }
+        )
+        cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="night shift canteen meals are cold",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            scenario_key="Canteen",
+            centroid_embedding=[0.1, 0.2],
+        )
+        storage.add_cluster_member(
+            cluster_id=cluster_id,
+            source_suggestion_id="S001",
+            decision_type="create_new_cluster",
+            vector_score=1.0,
+            keyword_score=1.0,
+            final_score=1.0,
+            decision_status="accepted",
+            decision_reason="new_cluster",
+        )
+
+        suggestion_rows = storage.list_persisted_suggestion_export_rows()
+        cluster_rows = storage.list_persisted_cluster_export_rows()
+
+        self.assertEqual(suggestion_rows[0]["source_suggestion_id"], "S001")
+        self.assertEqual(suggestion_rows[0]["raw_text"], "Night shift canteen meals are cold")
+        self.assertEqual(suggestion_rows[0]["primary_category"], "Logistics")
+        self.assertEqual(suggestion_rows[0]["cluster_id"], cluster_id)
+        self.assertEqual(suggestion_rows[0]["cluster_name"], "Canteen")
+        self.assertEqual(cluster_rows[0]["cluster_id"], cluster_id)
+        self.assertEqual(cluster_rows[0]["suggestion_count"], 1)
+        self.assertEqual(cluster_rows[0]["departments"], "Production")
+
     def test_apply_review_task_result_approves_pending_cluster_member_and_updates_count(self):
         storage = self.make_storage()
         storage.upsert_source_suggestion(

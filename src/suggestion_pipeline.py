@@ -40,6 +40,35 @@ REVIEW_TASK_EXPORT_FIELDS = [
     "created_at",
 ]
 
+PERSISTED_SUGGESTION_EXPORT_FIELDS = ["source_suggestion_id"] + INPUT_FIELDS + ANALYSIS_FIELDS
+
+PERSISTED_CLUSTER_EXPORT_FIELDS = [
+    "cluster_id",
+    "cluster_name",
+    "cluster_summary",
+    "primary_category",
+    "secondary_category",
+    "suggestion_count",
+    "department_count",
+    "departments",
+    "owner_department",
+    "urgency_level",
+    "review_required_count",
+    "representative_raw_text",
+]
+
+PERSISTED_ACTION_ITEM_FIELDS = [
+    "action_id",
+    "cluster_id",
+    "action_title",
+    "owner_department",
+    "urgency_level",
+    "status",
+    "suggestion_count",
+    "related_suggestion_ids",
+    "next_step",
+]
+
 
 def jaccard(left: set[str], right: set[str]) -> float:
     if not left or not right:
@@ -258,6 +287,108 @@ def export_review_tasks(db_path: Path, output: Path) -> int:
     return len(rows)
 
 
+def stringify_rows(rows: Iterable[dict[str, object]], fieldnames: list[str]) -> list[dict[str, str]]:
+    return [
+        {
+            field: "" if row.get(field) is None else str(row.get(field, ""))
+            for field in fieldnames
+        }
+        for row in rows
+    ]
+
+
+def persisted_action_item_rows(cluster_rows: list[dict[str, object]]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for cluster in cluster_rows:
+        cluster_id = str(cluster.get("cluster_id", ""))
+        review_count = int(cluster.get("review_required_count") or 0)
+        suggestion_count = int(cluster.get("suggestion_count") or 0)
+        urgency = str(cluster.get("urgency_level", ""))
+        if review_count:
+            status = "pending_review"
+            next_step = "Review uncertain suggestions before dispatching corrective action."
+        elif suggestion_count >= 3 or urgency == "high":
+            status = "pending_dispatch"
+            next_step = "Dispatch to owner department and track corrective action."
+        else:
+            status = "watchlist"
+            next_step = "Keep monitoring during the next daily import cycle."
+        rows.append(
+            {
+                "action_id": f"A-{cluster_id}",
+                "cluster_id": cluster_id,
+                "action_title": str(cluster.get("cluster_name", "")),
+                "owner_department": str(cluster.get("owner_department", "")),
+                "urgency_level": urgency,
+                "status": status,
+                "suggestion_count": str(suggestion_count),
+                "related_suggestion_ids": "",
+                "next_step": next_step,
+            }
+        )
+    return rows
+
+
+def build_persisted_weekly_report(
+    suggestion_rows: list[dict[str, object]],
+    cluster_rows: list[dict[str, object]],
+) -> str:
+    category_counts = Counter(str(row.get("primary_category", "")) or "Unclassified" for row in suggestion_rows)
+    review_count = sum(1 for row in suggestion_rows if str(row.get("review_required", "")).lower() in {"yes", "y", "true", "是"})
+    top_clusters = cluster_rows[:5]
+    lines = [
+        "# Persisted Analysis Report",
+        "",
+        "## Overview",
+        f"- Suggestions: {len(suggestion_rows)}",
+        f"- Active clusters: {len(cluster_rows)}",
+        f"- Suggestions requiring review: {review_count}",
+        "",
+        "## Category Distribution",
+    ]
+    for category, count in category_counts.most_common():
+        lines.append(f"- {category}: {count}")
+    lines.extend(["", "## Top Clusters"])
+    for cluster in top_clusters:
+        lines.append(
+            "- "
+            f"{cluster.get('cluster_name', '')}: "
+            f"{cluster.get('suggestion_count', 0)} suggestions, "
+            f"owner {cluster.get('owner_department', '')}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def export_db_results(db_path: Path, output_dir: Path) -> dict[str, int]:
+    with closing(sqlite3.connect(db_path)) as connection:
+        storage = Storage(connection)
+        storage.initialize_schema()
+        suggestion_rows = storage.list_persisted_suggestion_export_rows()
+        cluster_rows = storage.list_persisted_cluster_export_rows()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_csv(
+        output_dir / "suggestions_analyzed.csv",
+        PERSISTED_SUGGESTION_EXPORT_FIELDS,
+        stringify_rows(suggestion_rows, PERSISTED_SUGGESTION_EXPORT_FIELDS),
+    )
+    write_csv(
+        output_dir / "clusters.csv",
+        PERSISTED_CLUSTER_EXPORT_FIELDS,
+        stringify_rows(cluster_rows, PERSISTED_CLUSTER_EXPORT_FIELDS),
+    )
+    action_rows = persisted_action_item_rows(cluster_rows)
+    write_csv(output_dir / "action_items.csv", PERSISTED_ACTION_ITEM_FIELDS, action_rows)
+    (output_dir / "weekly_report.md").write_text(
+        build_persisted_weekly_report(suggestion_rows, cluster_rows),
+        encoding="utf-8-sig",
+    )
+    return {
+        "suggestions": len(suggestion_rows),
+        "clusters": len(cluster_rows),
+        "action_items": len(action_rows),
+    }
+
+
 def import_review_results(db_path: Path, input_path: Path) -> dict[str, int]:
     with input_path.open("r", encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
@@ -310,6 +441,10 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status", help="Print import status summary as JSON")
     status_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     status_parser.add_argument("--source", default="mysql", help="Import source name")
+
+    export_db_parser = subparsers.add_parser("export-db-results", help="Export persisted analysis results to CSV files")
+    export_db_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    export_db_parser.add_argument("--output-dir", required=True, type=Path, help="Persisted report output directory")
 
     export_review_parser = subparsers.add_parser("export-review-tasks", help="Export pending review tasks to CSV")
     export_review_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
@@ -373,6 +508,15 @@ def main(argv: list[str] | None = None) -> int:
             storage.initialize_schema()
             summary = storage.get_import_status_summary(args.source)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "export-db-results":
+        summary = export_db_results(args.db, args.output_dir)
+        print(
+            f"Exported persisted results to {args.output_dir}: "
+            f"suggestions={summary['suggestions']}, "
+            f"clusters={summary['clusters']}, "
+            f"action_items={summary['action_items']}"
+        )
         return 0
     if args.command == "export-review-tasks":
         exported = export_review_tasks(args.db, args.output)

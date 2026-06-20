@@ -677,6 +677,118 @@ class Storage:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_persisted_suggestion_export_rows(self) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                ss.source_suggestion_id,
+                ss.source_suggestion_id AS suggestion_id,
+                ss.submit_date,
+                ss.raw_text,
+                ss.department,
+                ss.job_group,
+                ss.work_location,
+                ss.scenario,
+                '' AS is_anonymous_for_report,
+                ss.status,
+                COALESCE(sa.owner_department, ss.owner_department, '') AS owner_department,
+                '' AS resolution_note,
+                '' AS closed_date,
+                COALESCE(sa.primary_category, '') AS primary_category,
+                COALESCE(sa.secondary_category, '') AS secondary_category,
+                COALESCE(sa.quality_type, '') AS quality_type,
+                COALESCE(sa.urgency_level, '') AS urgency_level,
+                COALESCE(cm.cluster_id, '') AS cluster_id,
+                COALESCE(ic.cluster_name, '') AS cluster_name,
+                COALESCE(ic.cluster_summary, '') AS cluster_summary,
+                COALESCE(CAST(sa.classification_confidence AS TEXT), '') AS confidence,
+                COALESCE(sa.review_required, '') AS review_required,
+                '' AS validation_flags
+            FROM source_suggestions ss
+            LEFT JOIN suggestion_analysis sa
+                ON sa.source_suggestion_id = ss.source_suggestion_id
+            LEFT JOIN cluster_members cm
+                ON cm.source_suggestion_id = ss.source_suggestion_id
+                AND cm.decision_status = 'accepted'
+            LEFT JOIN issue_clusters ic
+                ON ic.cluster_id = cm.cluster_id
+            ORDER BY ss.created_at, ss.source_suggestion_id
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_persisted_cluster_export_rows(self) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            WITH cluster_sources AS (
+                SELECT cluster_id, representative_suggestion_id AS source_suggestion_id
+                FROM issue_clusters
+                UNION
+                SELECT cluster_id, source_suggestion_id
+                FROM cluster_members
+                WHERE decision_status = 'accepted'
+            )
+            SELECT
+                ic.cluster_id,
+                ic.cluster_name,
+                ic.cluster_summary,
+                ic.primary_category,
+                ic.secondary_category,
+                COUNT(DISTINCT cs.source_suggestion_id) AS suggestion_count,
+                COUNT(DISTINCT NULLIF(ss.department, '')) AS department_count,
+                COALESCE(GROUP_CONCAT(DISTINCT NULLIF(ss.department, '')), '') AS departments,
+                ic.owner_department,
+                CASE MAX(
+                    CASE COALESCE(sa.urgency_level, '')
+                        WHEN 'high' THEN 3
+                        WHEN 'medium' THEN 2
+                        WHEN 'low' THEN 1
+                        WHEN '高' THEN 3
+                        WHEN '中' THEN 2
+                        WHEN '低' THEN 1
+                        ELSE 0
+                    END
+                )
+                    WHEN 3 THEN 'high'
+                    WHEN 2 THEN 'medium'
+                    WHEN 1 THEN 'low'
+                    ELSE ''
+                END AS urgency_level,
+                SUM(
+                    CASE LOWER(COALESCE(sa.review_required, ''))
+                        WHEN 'yes' THEN 1
+                        WHEN 'y' THEN 1
+                        WHEN 'true' THEN 1
+                        ELSE CASE COALESCE(sa.review_required, '')
+                            WHEN '是' THEN 1
+                            ELSE 0
+                        END
+                    END
+                ) AS review_required_count,
+                COALESCE(rep.raw_text, '') AS representative_raw_text
+            FROM issue_clusters ic
+            LEFT JOIN cluster_sources cs
+                ON cs.cluster_id = ic.cluster_id
+            LEFT JOIN source_suggestions ss
+                ON ss.source_suggestion_id = cs.source_suggestion_id
+            LEFT JOIN suggestion_analysis sa
+                ON sa.source_suggestion_id = cs.source_suggestion_id
+            LEFT JOIN source_suggestions rep
+                ON rep.source_suggestion_id = ic.representative_suggestion_id
+            WHERE ic.status = 'active'
+            GROUP BY
+                ic.cluster_id,
+                ic.cluster_name,
+                ic.cluster_summary,
+                ic.primary_category,
+                ic.secondary_category,
+                ic.owner_department,
+                rep.raw_text
+            ORDER BY suggestion_count DESC, ic.cluster_id
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def apply_review_task_result(
         self,
         *,

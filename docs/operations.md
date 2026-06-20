@@ -63,6 +63,14 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 - `table_counts.source_suggestions`：本地已保存源建议总数。
 - `table_counts.issue_clusters`：当前问题簇总数。
 
+导出当前分析结果，供业务查看和归档：
+
+```powershell
+python -m src.suggestion_pipeline export-db-results --db data/analysis.db --output-dir data/reports
+```
+
+导出目录会包含 `suggestions_analyzed.csv`、`clusters.csv`、`action_items.csv` 和 `weekly_report.md`，这些文件来自持久化分析库，适合每日导入后重复生成。
+
 ## 失败处理
 
 1. 先查看 Windows 任务计划程序的最近运行结果，确认是否为非 0 退出码。
