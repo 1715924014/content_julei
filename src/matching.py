@@ -47,6 +47,14 @@ def decide_cluster_match(evidence: MatchEvidence) -> MatchDecision:
             decision_reason="review_rejected_similar_pair",
         )
 
+    if "review_approved_similar_pair" in evidence.conflict_flags:
+        return MatchDecision(
+            decision_type="auto_merge",
+            cluster_id=evidence.candidate_cluster_id,
+            final_score=score,
+            decision_reason="review_approved_similar_pair",
+        )
+
     if evidence.conflict_flags:
         return MatchDecision(
             decision_type="manual_review",

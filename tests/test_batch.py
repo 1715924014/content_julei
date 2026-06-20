@@ -330,6 +330,111 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertEqual(new_member["decision_type"], "create_new_cluster")
         self.assertEqual(new_member["decision_reason"], "review_rejected_similar_pair")
 
+    def test_approved_review_feedback_auto_merges_similar_manual_band_candidate(self):
+        storage = self.make_storage()
+        provider = HashEmbeddingProvider()
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "canteen cold rice feedback",
+                "department": "Production",
+                "scenario": "Canteen",
+                "owner_department": "Facilities",
+            }
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S002",
+                "submit_date": "2026-06-02",
+                "created_at": "2026-06-02",
+                "raw_text": "canteen cold rice feedback",
+                "department": "Production",
+                "scenario": "Canteen",
+                "owner_department": "Facilities",
+            }
+        )
+        cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="canteen cold rice feedback",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            scenario_key="Canteen",
+            centroid_embedding=provider.embed("canteen cold rice feedback"),
+        )
+        storage.upsert_suggestion_analysis(
+            {
+                "source_suggestion_id": "S002",
+                "batch_id": storage.start_import_batch("test", cursor_start="0"),
+                "normalized_text": "canteen cold rice feedback",
+                "content_hash": "hash-s002-approved",
+                "primary_category": "Logistics",
+                "secondary_category": "Canteen",
+                "owner_department": "Facilities",
+                "quality_type": "normal",
+                "urgency_level": "medium",
+                "classification_confidence": 0.9,
+                "embedding_status": "ready",
+                "embedding_model": provider.model_name,
+                "embedding_ref": "",
+                "review_required": "no",
+                "analysis_status": "analyzed",
+            }
+        )
+        storage.add_cluster_member(
+            cluster_id=cluster_id,
+            source_suggestion_id="S002",
+            decision_type="manual_review",
+            vector_score=0.75,
+            keyword_score=0.75,
+            final_score=0.75,
+            decision_status="accepted",
+            decision_reason="review_approved",
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S003",
+                "submit_date": "2026-06-03",
+                "created_at": "2026-06-03",
+                "raw_text": "canteen cold rice feedback",
+                "department": "Production",
+                "scenario": "Canteen",
+                "owner_department": "Facilities",
+            }
+        )
+
+        persist_cluster_decision(
+            storage,
+            source_suggestion_id="S003",
+            normalized_text="canteen cold rice feedback",
+            scenario_key="Other",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            category_confidence=0.1,
+            embedding=provider.embed("canteen cold rice feedback"),
+        )
+
+        member = storage.connection.execute(
+            """
+            SELECT cluster_id, decision_status, decision_type, decision_reason
+            FROM cluster_members
+            WHERE source_suggestion_id = ?
+            """,
+            ("S003",),
+        ).fetchone()
+        review_task = storage.connection.execute(
+            "SELECT 1 FROM review_tasks WHERE source_suggestion_id = ?",
+            ("S003",),
+        ).fetchone()
+        self.assertEqual(member["cluster_id"], cluster_id)
+        self.assertEqual(member["decision_status"], "accepted")
+        self.assertEqual(member["decision_type"], "auto_merge")
+        self.assertEqual(member["decision_reason"], "review_approved_similar_pair")
+        self.assertIsNone(review_task)
+
     def test_different_category_creates_separate_cluster(self):
         storage = self.make_storage()
         logistics_keyword = str(CATEGORY_RULES[0]["keywords"][0])

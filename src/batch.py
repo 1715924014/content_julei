@@ -110,6 +110,11 @@ def persist_cluster_decision(
         if keyword_overlap_score(normalized_text, rejected_text) >= 0.8:
             conflict_flags.append("review_rejected_similar_pair")
             break
+    if not conflict_flags:
+        for approved_text in storage.list_review_approved_member_texts(candidate.cluster.cluster_id):
+            if keyword_overlap_score(normalized_text, approved_text) >= 0.8:
+                conflict_flags.append("review_approved_similar_pair")
+                break
     evidence = MatchEvidence(
         candidate_cluster_id=candidate.cluster.cluster_id,
         vector_score=candidate.vector_score,

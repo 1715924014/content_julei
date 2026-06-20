@@ -935,6 +935,23 @@ class Storage:
         ).fetchall()
         return [str(row["normalized_text"]) for row in rows]
 
+    def list_review_approved_member_texts(self, cluster_id: str) -> list[str]:
+        rows = self.connection.execute(
+            """
+            SELECT sa.normalized_text
+            FROM cluster_members cm
+            JOIN suggestion_analysis sa
+                ON sa.source_suggestion_id = cm.source_suggestion_id
+            WHERE cm.cluster_id = ?
+                AND cm.decision_status = 'accepted'
+                AND cm.decision_reason = 'review_approved'
+                AND sa.normalized_text <> ''
+            ORDER BY cm.created_at DESC
+            """,
+            (cluster_id,),
+        ).fetchall()
+        return [str(row["normalized_text"]) for row in rows]
+
     def apply_review_task_result(
         self,
         *,

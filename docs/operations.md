@@ -117,6 +117,7 @@ python -m src.suggestion_pipeline import-review-results --db data/analysis.db --
 ```
 
 被人工 `reject` 的相似关系会作为后续聚类的负反馈；新的高度相似建议不会再自动并入同一个被拒绝过的候选簇。
+被人工 `approve` 的相似关系会作为正反馈；后续高度相似建议可以直接自动合并，减少重复复核。
 
 - 每月备份 `data/analysis.db` 和 `logs` 目录。
 

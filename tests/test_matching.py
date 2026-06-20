@@ -149,6 +149,23 @@ class MatchDecisionTests(unittest.TestCase):
         self.assertIsNone(decision.cluster_id)
         self.assertEqual(decision.decision_reason, "review_rejected_similar_pair")
 
+    def test_reviewer_approved_similarity_auto_merges_manual_band_score(self):
+        decision = decide_cluster_match(
+            MatchEvidence(
+                candidate_cluster_id="C005",
+                vector_score=0.79,
+                keyword_score=0.7,
+                same_scenario=False,
+                same_owner_department=False,
+                category_confidence=0.8,
+                conflict_flags=["review_approved_similar_pair"],
+            )
+        )
+
+        self.assertEqual(decision.decision_type, "auto_merge")
+        self.assertEqual(decision.cluster_id, "C005")
+        self.assertEqual(decision.decision_reason, "review_approved_similar_pair")
+
     def test_low_score_creates_new_cluster(self):
         decision = decide_cluster_match(
             MatchEvidence(
