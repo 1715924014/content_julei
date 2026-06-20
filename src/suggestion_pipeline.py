@@ -19,6 +19,25 @@ from src.storage import Storage
 from src.text_processing import text_features, validate_suggestion
 
 
+REVIEW_TASK_EXPORT_FIELDS = [
+    "review_task_id",
+    "source_suggestion_id",
+    "candidate_cluster_id",
+    "candidate_cluster_name",
+    "task_type",
+    "priority",
+    "status",
+    "raw_text",
+    "department",
+    "job_group",
+    "work_location",
+    "scenario",
+    "owner_department",
+    "evidence_json",
+    "created_at",
+]
+
+
 def jaccard(left: set[str], right: set[str]) -> float:
     if not left or not right:
         return 0.0
@@ -220,6 +239,22 @@ def analyze_file(input_path: Path, output_dir: Path) -> None:
     (output_dir / "weekly_report.md").write_text(build_weekly_report(suggestions, clusters), encoding="utf-8-sig")
 
 
+def export_review_tasks(db_path: Path, output: Path) -> int:
+    with closing(sqlite3.connect(db_path)) as connection:
+        storage = Storage(connection)
+        storage.initialize_schema()
+        tasks = storage.list_pending_review_tasks()
+    rows = [
+        {
+            field: "" if task.get(field) is None else str(task.get(field, ""))
+            for field in REVIEW_TASK_EXPORT_FIELDS
+        }
+        for task in tasks
+    ]
+    write_csv(output, REVIEW_TASK_EXPORT_FIELDS, rows)
+    return len(rows)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="员工建议分类聚类与整改闭环工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -240,6 +275,10 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status", help="Print import status summary as JSON")
     status_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     status_parser.add_argument("--source", default="mysql", help="Import source name")
+
+    export_review_parser = subparsers.add_parser("export-review-tasks", help="Export pending review tasks to CSV")
+    export_review_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    export_review_parser.add_argument("--output", required=True, type=Path, help="Pending review tasks CSV output path")
 
     import_csv_parser = subparsers.add_parser("import-csv", help="Import suggestions CSV incrementally")
     import_csv_parser.add_argument("--input", required=True, type=Path, help="Suggestions CSV input path")
@@ -295,6 +334,10 @@ def main(argv: list[str] | None = None) -> int:
             storage.initialize_schema()
             summary = storage.get_import_status_summary(args.source)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "export-review-tasks":
+        exported = export_review_tasks(args.db, args.output)
+        print(f"Exported pending review tasks: {exported} -> {args.output}")
         return 0
     if args.command == "import-csv":
         with closing(sqlite3.connect(args.db)) as connection:

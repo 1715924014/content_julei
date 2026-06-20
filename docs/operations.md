@@ -92,7 +92,12 @@ python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.jso
 
 - 每天确认任务计划结果为成功。
 - 每天检查 `status` 输出中的 `rows_failed` 是否为 `0`。
-- 每周抽查 `review_tasks` 和低置信度聚类，避免相似问题被错误合并。
+- 每周导出并抽查 `review_tasks`，重点复核低置信度、边界相似和信息不足的聚类，避免相似问题被错误合并：
+
+```powershell
+python -m src.suggestion_pipeline export-review-tasks --db data/analysis.db --output data/review_tasks.csv
+```
+
 - 每月备份 `data/analysis.db` 和 `logs` 目录。
 
 执行备份：

@@ -1,5 +1,6 @@
 import sqlite3
 import unittest
+import json
 
 from src.storage import Storage
 
@@ -197,6 +198,51 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(stored["department"], "Production")
         self.assertEqual(stored["scenario"], "Night canteen")
         self.assertEqual(stored["owner_department"], "Operations Excellence")
+
+    def test_list_pending_review_tasks_includes_source_and_candidate_cluster_context(self):
+        storage = self.make_storage()
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "Night shift canteen meals are cold",
+                "department": "Production",
+                "job_group": "Operator",
+                "work_location": "Plant A",
+                "scenario": "Canteen",
+                "status": "new",
+                "owner_department": "Facilities",
+            }
+        )
+        cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="Night shift employees report cold meals.",
+            primary_category="Logistics",
+            secondary_category="Night canteen hot meals",
+            owner_department="Facilities",
+            scenario_key="canteen",
+            centroid_embedding=[0.1, 0.2, 0.3],
+        )
+        storage.create_review_task(
+            source_suggestion_id="S001",
+            candidate_cluster_id=cluster_id,
+            task_type="manual_cluster_review",
+            priority=80,
+            evidence={"final_score": 0.72, "reason": "borderline vector match"},
+        )
+
+        tasks = storage.list_pending_review_tasks()
+
+        self.assertEqual(len(tasks), 1)
+        task = tasks[0]
+        self.assertEqual(task["source_suggestion_id"], "S001")
+        self.assertEqual(task["candidate_cluster_id"], cluster_id)
+        self.assertEqual(task["candidate_cluster_name"], "Night canteen hot meals")
+        self.assertEqual(task["raw_text"], "Night shift canteen meals are cold")
+        self.assertEqual(task["department"], "Production")
+        self.assertEqual(task["scenario"], "Canteen")
+        self.assertEqual(json.loads(task["evidence_json"])["final_score"], 0.72)
 
 
 if __name__ == "__main__":

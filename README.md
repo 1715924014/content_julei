@@ -110,6 +110,12 @@ powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -Projec
 python -m src.suggestion_pipeline status --db output_run_check/analysis.db --source mysql
 ```
 
+导出待人工复核的低置信度/歧义聚类任务，供业务人员抽查和校正：
+
+```powershell
+python -m src.suggestion_pipeline export-review-tasks --db output_run_check/analysis.db --output output_run_check/review_tasks.csv
+```
+
 备份分析库和运行日志：
 
 ```powershell

@@ -647,6 +647,36 @@ class Storage:
         )
         self.connection.commit()
 
+    def list_pending_review_tasks(self) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                rt.review_task_id,
+                rt.source_suggestion_id,
+                rt.candidate_cluster_id,
+                rt.task_type,
+                rt.priority,
+                rt.evidence_json,
+                rt.status,
+                rt.created_at,
+                ss.raw_text,
+                ss.department,
+                ss.job_group,
+                ss.work_location,
+                ss.scenario,
+                ss.owner_department,
+                ic.cluster_name AS candidate_cluster_name
+            FROM review_tasks rt
+            JOIN source_suggestions ss
+                ON ss.source_suggestion_id = rt.source_suggestion_id
+            LEFT JOIN issue_clusters ic
+                ON ic.cluster_id = rt.candidate_cluster_id
+            WHERE rt.status = 'pending'
+            ORDER BY rt.priority DESC, rt.created_at ASC, rt.review_task_id ASC
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def count_table(self, table_name: str) -> int:
         if table_name not in COUNTABLE_TABLES:
             raise ValueError(f"cannot count unknown table: {table_name}")

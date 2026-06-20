@@ -1,4 +1,5 @@
 import io
+import csv
 import json
 import sqlite3
 import tempfile
@@ -155,6 +156,48 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(payload["source_name"], "mysql")
         self.assertEqual(payload["latest_successful_cursor"], "100")
         self.assertEqual(payload["latest_batch"]["rows_read"], 10)
+
+    def test_export_review_tasks_writes_pending_tasks_to_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            output_path = Path(directory) / "review_tasks.csv"
+            with closing(sqlite3.connect(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                storage.upsert_source_suggestion(
+                    {
+                        "source_suggestion_id": "S001",
+                        "submit_date": "2026-06-01",
+                        "created_at": "2026-06-01",
+                        "raw_text": "Night shift canteen meals are cold",
+                        "department": "Production",
+                        "job_group": "Operator",
+                        "work_location": "Plant A",
+                        "scenario": "Canteen",
+                        "status": "new",
+                        "owner_department": "Facilities",
+                    }
+                )
+                storage.create_review_task(
+                    source_suggestion_id="S001",
+                    candidate_cluster_id=None,
+                    task_type="manual_cluster_review",
+                    priority=90,
+                    evidence={"reason": "low confidence"},
+                )
+
+            from src.suggestion_pipeline import main
+
+            exit_code = main(["export-review-tasks", "--db", str(db_path), "--output", str(output_path)])
+
+            self.assertEqual(exit_code, 0)
+            with output_path.open("r", encoding="utf-8-sig", newline="") as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["source_suggestion_id"], "S001")
+            self.assertEqual(rows[0]["raw_text"], "Night shift canteen meals are cold")
+            self.assertEqual(rows[0]["priority"], "90")
+            self.assertEqual(rows[0]["candidate_cluster_name"], "")
 
     def test_doctor_outputs_report_and_returns_failure_for_failed_checks(self):
         with patch(
