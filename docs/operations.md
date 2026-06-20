@@ -116,6 +116,8 @@ python -m src.suggestion_pipeline export-review-tasks --db data/analysis.db --ou
 python -m src.suggestion_pipeline import-review-results --db data/analysis.db --input data/review_tasks.csv
 ```
 
+被人工 `reject` 的相似关系会作为后续聚类的负反馈；新的高度相似建议不会再自动并入同一个被拒绝过的候选簇。
+
 - 每月备份 `data/analysis.db` 和 `logs` 目录。
 
 执行备份：

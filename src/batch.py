@@ -105,6 +105,11 @@ def persist_cluster_decision(
     candidate = candidates[0]
     cluster = storage.get_issue_cluster(candidate.cluster.cluster_id)
     keyword_score = keyword_overlap_score(normalized_text, candidate.cluster.text)
+    conflict_flags: list[str] = []
+    for rejected_text in storage.list_rejected_member_texts(candidate.cluster.cluster_id):
+        if keyword_overlap_score(normalized_text, rejected_text) >= 0.8:
+            conflict_flags.append("review_rejected_similar_pair")
+            break
     evidence = MatchEvidence(
         candidate_cluster_id=candidate.cluster.cluster_id,
         vector_score=candidate.vector_score,
@@ -112,7 +117,7 @@ def persist_cluster_decision(
         same_scenario=(cluster["scenario_key"] or "") == (scenario_key or ""),
         same_owner_department=candidate.cluster.owner_department == owner_department,
         category_confidence=category_confidence,
-        conflict_flags=[],
+        conflict_flags=conflict_flags,
     )
     decision = decide_cluster_match(evidence)
 

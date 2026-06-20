@@ -39,6 +39,14 @@ def final_match_score(evidence: MatchEvidence) -> float:
 def decide_cluster_match(evidence: MatchEvidence) -> MatchDecision:
     score = final_match_score(evidence)
 
+    if "review_rejected_similar_pair" in evidence.conflict_flags:
+        return MatchDecision(
+            decision_type="create_new_cluster",
+            cluster_id=None,
+            final_score=score,
+            decision_reason="review_rejected_similar_pair",
+        )
+
     if evidence.conflict_flags:
         return MatchDecision(
             decision_type="manual_review",

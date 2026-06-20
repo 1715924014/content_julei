@@ -132,6 +132,23 @@ class MatchDecisionTests(unittest.TestCase):
         self.assertEqual(decision.cluster_id, "C003")
         self.assertGreaterEqual(decision.final_score, 0.86)
 
+    def test_reviewer_rejected_similarity_creates_new_cluster(self):
+        decision = decide_cluster_match(
+            MatchEvidence(
+                candidate_cluster_id="C003",
+                vector_score=0.95,
+                keyword_score=0.95,
+                same_scenario=True,
+                same_owner_department=True,
+                category_confidence=0.95,
+                conflict_flags=["review_rejected_similar_pair"],
+            )
+        )
+
+        self.assertEqual(decision.decision_type, "create_new_cluster")
+        self.assertIsNone(decision.cluster_id)
+        self.assertEqual(decision.decision_reason, "review_rejected_similar_pair")
+
     def test_low_score_creates_new_cluster(self):
         decision = decide_cluster_match(
             MatchEvidence(

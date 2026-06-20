@@ -4,8 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.batch import run_csv_import_batch, run_rows_import_batch
+from src.batch import persist_cluster_decision, run_csv_import_batch, run_rows_import_batch
 from src.classification import CATEGORY_RULES
+from src.embeddings import HashEmbeddingProvider
 from src.domain import INPUT_FIELDS
 from src.storage import Storage
 
@@ -229,6 +230,105 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertIn(member["decision_type"], {"auto_merge", "manual_review"})
         self.assertIn(member["decision_status"], {"accepted", "pending"})
         self.assertGreaterEqual(member["final_score"], 0.72)
+
+    def test_rejected_review_feedback_prevents_repeating_same_bad_candidate(self):
+        storage = self.make_storage()
+        provider = HashEmbeddingProvider()
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "canteen cold rice and cold meals",
+                "department": "Production",
+                "scenario": "Canteen",
+                "owner_department": "Facilities",
+            }
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S002",
+                "submit_date": "2026-06-02",
+                "created_at": "2026-06-02",
+                "raw_text": "canteen cold rice and cold meals",
+                "department": "Production",
+                "scenario": "Canteen",
+                "owner_department": "Facilities",
+            }
+        )
+        cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="canteen cold rice and cold meals",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            scenario_key="Canteen",
+            centroid_embedding=provider.embed("canteen cold rice and cold meals"),
+        )
+        storage.upsert_suggestion_analysis(
+            {
+                "source_suggestion_id": "S002",
+                "batch_id": storage.start_import_batch("test", cursor_start="0"),
+                "normalized_text": "canteen cold rice and cold meals",
+                "content_hash": "hash-s002",
+                "primary_category": "Logistics",
+                "secondary_category": "Canteen",
+                "owner_department": "Facilities",
+                "quality_type": "normal",
+                "urgency_level": "medium",
+                "classification_confidence": 0.9,
+                "embedding_status": "ready",
+                "embedding_model": provider.model_name,
+                "embedding_ref": "",
+                "review_required": "no",
+                "analysis_status": "analyzed",
+            }
+        )
+        storage.add_cluster_member(
+            cluster_id=cluster_id,
+            source_suggestion_id="S002",
+            decision_type="manual_review",
+            vector_score=0.95,
+            keyword_score=0.95,
+            final_score=0.95,
+            decision_status="rejected",
+            decision_reason="review_rejected",
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S003",
+                "submit_date": "2026-06-03",
+                "created_at": "2026-06-03",
+                "raw_text": "canteen cold rice and cold meals",
+                "department": "Production",
+                "scenario": "Canteen",
+                "owner_department": "Facilities",
+            }
+        )
+
+        persist_cluster_decision(
+            storage,
+            source_suggestion_id="S003",
+            normalized_text="canteen cold rice and cold meals",
+            scenario_key="Canteen",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            category_confidence=0.9,
+            embedding=provider.embed("canteen cold rice and cold meals"),
+        )
+
+        new_member = storage.connection.execute(
+            """
+            SELECT cluster_id, decision_type, decision_reason
+            FROM cluster_members
+            WHERE source_suggestion_id = ? AND decision_status = 'accepted'
+            """,
+            ("S003",),
+        ).fetchone()
+        self.assertNotEqual(new_member["cluster_id"], cluster_id)
+        self.assertEqual(new_member["decision_type"], "create_new_cluster")
+        self.assertEqual(new_member["decision_reason"], "review_rejected_similar_pair")
 
     def test_different_category_creates_separate_cluster(self):
         storage = self.make_storage()
