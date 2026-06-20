@@ -365,6 +365,7 @@ def export_db_results(db_path: Path, output_dir: Path) -> dict[str, int]:
         storage.initialize_schema()
         suggestion_rows = storage.list_persisted_suggestion_export_rows()
         cluster_rows = storage.list_persisted_cluster_export_rows()
+        action_rows = storage.list_persisted_action_item_export_rows()
     output_dir.mkdir(parents=True, exist_ok=True)
     write_csv(
         output_dir / "suggestions_analyzed.csv",
@@ -376,7 +377,8 @@ def export_db_results(db_path: Path, output_dir: Path) -> dict[str, int]:
         PERSISTED_CLUSTER_EXPORT_FIELDS,
         stringify_rows(cluster_rows, PERSISTED_CLUSTER_EXPORT_FIELDS),
     )
-    action_rows = persisted_action_item_rows(cluster_rows)
+    if not action_rows:
+        action_rows = persisted_action_item_rows(cluster_rows)
     write_csv(output_dir / "action_items.csv", PERSISTED_ACTION_ITEM_FIELDS, action_rows)
     (output_dir / "weekly_report.md").write_text(
         build_persisted_weekly_report(suggestion_rows, cluster_rows),

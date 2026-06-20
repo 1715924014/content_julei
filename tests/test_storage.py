@@ -338,6 +338,52 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(cluster_rows[0]["suggestion_count"], 1)
         self.assertEqual(cluster_rows[0]["departments"], "Production")
 
+    def test_upsert_action_item_for_cluster_creates_and_refreshes_persisted_todo(self):
+        storage = self.make_storage()
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "S001",
+                "submit_date": "2026-06-01",
+                "created_at": "2026-06-01",
+                "raw_text": "Night shift canteen meals are cold",
+                "department": "Production",
+                "scenario": "Canteen",
+                "owner_department": "Facilities",
+            }
+        )
+        cluster_id = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="Night shift canteen meals are cold",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            scenario_key="Canteen",
+            centroid_embedding=[0.1, 0.2],
+        )
+
+        storage.upsert_action_item_for_cluster(cluster_id)
+        first = storage.connection.execute("SELECT * FROM action_items WHERE cluster_id = ?", (cluster_id,)).fetchone()
+        storage.connection.execute(
+            """
+            UPDATE issue_clusters
+            SET suggestion_count = 3,
+                cluster_name = 'Night shift canteen meals'
+            WHERE cluster_id = ?
+            """,
+            (cluster_id,),
+        )
+        storage.connection.commit()
+        storage.upsert_action_item_for_cluster(cluster_id)
+        refreshed = storage.connection.execute("SELECT * FROM action_items WHERE cluster_id = ?", (cluster_id,)).fetchone()
+
+        self.assertEqual(first["action_id"], f"A-{cluster_id}")
+        self.assertEqual(first["status"], "watchlist")
+        self.assertEqual(refreshed["action_title"], "Night shift canteen meals")
+        self.assertEqual(refreshed["suggestion_count"], 3)
+        self.assertEqual(refreshed["status"], "pending_dispatch")
+        self.assertEqual(refreshed["first_seen_at"], first["first_seen_at"])
+        self.assertGreaterEqual(refreshed["last_seen_at"], first["last_seen_at"])
+
     def test_apply_review_task_result_approves_pending_cluster_member_and_updates_count(self):
         storage = self.make_storage()
         storage.upsert_source_suggestion(

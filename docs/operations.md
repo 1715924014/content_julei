@@ -72,6 +72,7 @@ python -m src.suggestion_pipeline export-db-results --db data/analysis.db --outp
 ```
 
 导出目录会包含 `suggestions_analyzed.csv`、`clusters.csv`、`action_items.csv` 和 `weekly_report.md`，这些文件来自持久化分析库，适合每日导入后重复生成。
+其中 `action_items.csv` 来自持久化整改待办表；每日导入会按问题簇刷新建议数、状态和下一步建议。
 
 ## 失败处理
 

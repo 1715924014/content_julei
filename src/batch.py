@@ -99,6 +99,7 @@ def persist_cluster_decision(
             decision_status="accepted",
             decision_reason="no_candidate_cluster",
         )
+        storage.upsert_action_item_for_cluster(cluster_id)
         return
 
     candidate = candidates[0]
@@ -135,11 +136,13 @@ def persist_cluster_decision(
             decision_status="accepted",
             decision_reason=decision.decision_reason,
         )
+        storage.upsert_action_item_for_cluster(cluster_id)
         return
 
+    cluster_id = decision.cluster_id or candidate.cluster.cluster_id
     decision_status = "accepted" if decision.decision_type == "auto_merge" else "pending"
     storage.add_cluster_member(
-        cluster_id=decision.cluster_id or candidate.cluster.cluster_id,
+        cluster_id=cluster_id,
         source_suggestion_id=source_suggestion_id,
         decision_type=decision.decision_type,
         vector_score=candidate.vector_score,
@@ -161,6 +164,7 @@ def persist_cluster_decision(
                 "decision_reason": decision.decision_reason,
             },
         )
+    storage.upsert_action_item_for_cluster(cluster_id)
 
 
 def run_rows_import_batch(

@@ -804,6 +804,121 @@ class Storage:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def upsert_action_item_for_cluster(self, cluster_id: str) -> None:
+        cluster = self.connection.execute(
+            """
+            SELECT cluster_id, cluster_name, owner_department, suggestion_count,
+                last_seen_at
+            FROM issue_clusters
+            WHERE cluster_id = ?
+            """,
+            (cluster_id,),
+        ).fetchone()
+        if cluster is None:
+            raise KeyError(f"unknown issue cluster: {cluster_id}")
+
+        urgency_row = self.connection.execute(
+            """
+            SELECT MAX(
+                CASE COALESCE(sa.urgency_level, '')
+                    WHEN 'high' THEN 3
+                    WHEN 'medium' THEN 2
+                    WHEN 'low' THEN 1
+                    WHEN '高' THEN 3
+                    WHEN '中' THEN 2
+                    WHEN '低' THEN 1
+                    ELSE 0
+                END
+            ) AS urgency_rank
+            FROM cluster_members cm
+            LEFT JOIN suggestion_analysis sa
+                ON sa.source_suggestion_id = cm.source_suggestion_id
+            WHERE cm.cluster_id = ? AND cm.decision_status = 'accepted'
+            """,
+            (cluster_id,),
+        ).fetchone()
+        urgency_rank = int(urgency_row["urgency_rank"] or 0)
+        urgency_level = {3: "high", 2: "medium", 1: "low"}.get(urgency_rank, "")
+
+        pending_review = self.connection.execute(
+            """
+            SELECT COUNT(*) AS pending_count
+            FROM review_tasks
+            WHERE candidate_cluster_id = ? AND status = 'pending'
+            """,
+            (cluster_id,),
+        ).fetchone()
+        suggestion_count = int(cluster["suggestion_count"] or 0)
+        if int(pending_review["pending_count"]) > 0:
+            status = "pending_review"
+            next_step = "Review uncertain suggestions before dispatching corrective action."
+        elif suggestion_count >= 3 or urgency_level == "high":
+            status = "pending_dispatch"
+            next_step = "Dispatch to owner department and track corrective action."
+        else:
+            status = "watchlist"
+            next_step = "Keep monitoring during the next daily import cycle."
+
+        now = utc_now()
+        existing = self.connection.execute(
+            "SELECT first_seen_at FROM action_items WHERE cluster_id = ?",
+            (cluster_id,),
+        ).fetchone()
+        first_seen_at = existing["first_seen_at"] if existing is not None else now
+        self.connection.execute(
+            """
+            INSERT INTO action_items (
+                action_id, cluster_id, action_title, owner_department,
+                urgency_level, status, suggestion_count, first_seen_at,
+                last_seen_at, next_step, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cluster_id) DO UPDATE SET
+                action_title = excluded.action_title,
+                owner_department = excluded.owner_department,
+                urgency_level = excluded.urgency_level,
+                status = excluded.status,
+                suggestion_count = excluded.suggestion_count,
+                last_seen_at = excluded.last_seen_at,
+                next_step = excluded.next_step,
+                updated_at = excluded.updated_at
+            """,
+            (
+                f"A-{cluster_id}",
+                cluster_id,
+                cluster["cluster_name"],
+                cluster["owner_department"],
+                urgency_level,
+                status,
+                suggestion_count,
+                first_seen_at,
+                cluster["last_seen_at"] or now,
+                next_step,
+                now,
+                now,
+            ),
+        )
+        self.connection.commit()
+
+    def list_persisted_action_item_export_rows(self) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT action_id, cluster_id, action_title, owner_department,
+                urgency_level, status, suggestion_count, '' AS related_suggestion_ids,
+                next_step
+            FROM action_items
+            ORDER BY
+                CASE status
+                    WHEN 'pending_review' THEN 0
+                    WHEN 'pending_dispatch' THEN 1
+                    ELSE 2
+                END,
+                suggestion_count DESC,
+                cluster_id
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def apply_review_task_result(
         self,
         *,

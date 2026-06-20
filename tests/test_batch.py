@@ -178,15 +178,19 @@ class CsvImportBatchTests(unittest.TestCase):
             result = run_csv_import_batch(storage, input_path)
             cluster = storage.connection.execute("SELECT * FROM issue_clusters").fetchone()
             member = storage.connection.execute("SELECT * FROM cluster_members").fetchone()
+            action = storage.connection.execute("SELECT * FROM action_items").fetchone()
 
         self.assertEqual(result.rows_failed, 0)
         self.assertEqual(storage.count_table("issue_clusters"), 1)
         self.assertEqual(storage.count_table("cluster_members"), 1)
+        self.assertEqual(storage.count_table("action_items"), 1)
         self.assertEqual(cluster["representative_suggestion_id"], "S001")
         self.assertEqual(cluster["suggestion_count"], 1)
         self.assertEqual(member["source_suggestion_id"], "S001")
         self.assertEqual(member["decision_type"], "create_new_cluster")
         self.assertEqual(member["decision_status"], "accepted")
+        self.assertEqual(action["cluster_id"], cluster["cluster_id"])
+        self.assertEqual(action["suggestion_count"], 1)
 
     def test_similar_second_suggestion_records_candidate_cluster_decision(self):
         storage = self.make_storage()

@@ -218,6 +218,7 @@ class SuggestionPipelineTests(unittest.TestCase):
                     decision_status="accepted",
                     decision_reason="new_cluster",
                 )
+                storage.upsert_action_item_for_cluster(cluster_id)
 
             from src.suggestion_pipeline import main
 
@@ -233,6 +234,10 @@ class SuggestionPipelineTests(unittest.TestCase):
             with (output_dir / "clusters.csv").open("r", encoding="utf-8-sig", newline="") as file:
                 clusters = list(csv.DictReader(file))
             self.assertEqual(clusters[0]["suggestion_count"], "1")
+            with (output_dir / "action_items.csv").open("r", encoding="utf-8-sig", newline="") as file:
+                actions = list(csv.DictReader(file))
+            self.assertEqual(actions[0]["cluster_id"], cluster_id)
+            self.assertEqual(actions[0]["status"], "watchlist")
             self.assertIn("Persisted Analysis Report", (output_dir / "weekly_report.md").read_text(encoding="utf-8-sig"))
 
     def test_export_review_tasks_writes_pending_tasks_to_csv(self):
