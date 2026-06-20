@@ -11,6 +11,31 @@ class StorageTests(unittest.TestCase):
         storage.initialize_schema()
         return storage
 
+    def test_initialize_schema_creates_query_indexes_for_incremental_growth(self):
+        storage = self.make_storage()
+
+        expected_indexes = {
+            "idx_import_batches_source_status_batch",
+            "idx_source_suggestions_created",
+            "idx_suggestion_analysis_batch",
+            "idx_issue_clusters_status_category_owner",
+            "idx_cluster_members_source_status",
+            "idx_cluster_members_cluster_status",
+            "idx_review_tasks_status_priority_created",
+        }
+        actual_indexes = {
+            row["name"]
+            for row in storage.connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'index'
+                """
+            ).fetchall()
+        }
+
+        self.assertTrue(expected_indexes.issubset(actual_indexes))
+
     def test_import_batch_lifecycle_stores_success_status_cursor_and_counts(self):
         storage = self.make_storage()
 

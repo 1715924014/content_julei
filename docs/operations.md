@@ -19,6 +19,8 @@ python -m pip install -r requirements.txt
 python -m src.suggestion_pipeline init-db --db data/analysis.db
 ```
 
+`init-db` 可以重复执行；它会保留已有数据，并为每日增量导入、状态查询、结果导出和复核队列补齐必要索引。
+
 6. 运行本地预检，确认配置、字段映射、密码环境变量和分析库可用：
 
 ```powershell

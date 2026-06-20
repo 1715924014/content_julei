@@ -169,6 +169,21 @@ class Storage:
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (cluster_id) REFERENCES issue_clusters(cluster_id)
             );
+
+            CREATE INDEX IF NOT EXISTS idx_import_batches_source_status_batch
+                ON import_batches(source_name, status, batch_id DESC);
+            CREATE INDEX IF NOT EXISTS idx_source_suggestions_created
+                ON source_suggestions(created_at, source_suggestion_id);
+            CREATE INDEX IF NOT EXISTS idx_suggestion_analysis_batch
+                ON suggestion_analysis(batch_id, source_suggestion_id);
+            CREATE INDEX IF NOT EXISTS idx_issue_clusters_status_category_owner
+                ON issue_clusters(status, primary_category, secondary_category, owner_department);
+            CREATE INDEX IF NOT EXISTS idx_cluster_members_source_status
+                ON cluster_members(source_suggestion_id, decision_status);
+            CREATE INDEX IF NOT EXISTS idx_cluster_members_cluster_status
+                ON cluster_members(cluster_id, decision_status);
+            CREATE INDEX IF NOT EXISTS idx_review_tasks_status_priority_created
+                ON review_tasks(status, priority DESC, created_at, review_task_id);
             """
         )
         self._ensure_source_suggestions_owner_department()
