@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -49,6 +50,7 @@ def run_daily_mysql_job(
     limit: int | None = None,
     cursor_override: str | None = None,
 ) -> int:
+    started_monotonic = time.perf_counter()
     started_at = utc_now()
     log_dir.mkdir(parents=True, exist_ok=True)
     safe_timestamp = started_at.replace("+00:00", "Z").replace(":", "")
@@ -77,6 +79,9 @@ def run_daily_mysql_job(
                 "rows_created": batch.rows_created,
                 "rows_skipped": batch.rows_skipped,
                 "rows_failed": batch.rows_failed,
+                "cursor_start": getattr(batch, "cursor_start", ""),
+                "cursor_end": getattr(batch, "cursor_end", ""),
+                "error_summary": getattr(batch, "error_summary", ""),
             }
         )
         exit_code = 0
@@ -85,10 +90,12 @@ def run_daily_mysql_job(
             {
                 "status": "failed",
                 "error": str(exc),
+                "error_summary": str(exc),
             }
         )
         exit_code = 1
     payload["finished_at"] = utc_now()
+    payload["duration_seconds"] = round(time.perf_counter() - started_monotonic, 3)
     log_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Daily MySQL job log: {log_path}")
     return exit_code

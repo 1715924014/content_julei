@@ -20,6 +20,9 @@ class BatchResult:
     rows_created: int
     rows_skipped: int
     rows_failed: int
+    cursor_start: str
+    cursor_end: str
+    error_summary: str
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -248,7 +251,16 @@ def run_rows_import_batch(
         rows_failed=rows_failed,
         error_summary=error_summary,
     )
-    return BatchResult(batch_id, len(rows), rows_created, rows_skipped, rows_failed)
+    return BatchResult(
+        batch_id,
+        len(rows),
+        rows_created,
+        rows_skipped,
+        rows_failed,
+        cursor_start,
+        cursor_end,
+        error_summary or "",
+    )
 
 
 def run_csv_import_batch(storage: Storage, input_path: Path) -> BatchResult:
