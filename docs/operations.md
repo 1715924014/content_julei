@@ -69,6 +69,7 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 - `health.status`: `ok` means the latest import is clean; `warning` means follow-up is needed, such as pending review tasks; `attention` means failed import rows need immediate handling.
 - `health.reasons`: machine-readable reasons such as `latest_batch_has_failed_rows` and `pending_review_tasks`.
 - `pending_review_tasks`: pending manual review count. Keep it low to prevent uncertain clusters from accumulating.
+- For monitoring scripts, run `status --fail-on-unhealthy`; it still prints JSON but returns exit code `1` when `health.status` is not `ok`.
 - `table_counts.source_suggestions`：本地已保存源建议总数。
 - `table_counts.issue_clusters`：当前问题簇总数。
 

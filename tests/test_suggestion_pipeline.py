@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.suggestion_pipeline import INPUT_FIELDS, analyze_rows
-from src.storage import Storage
+from src.storage import Storage, connect_analysis_db
 
 
 def row(suggestion_id, raw_text, department="生产一部", scenario="食堂"):
@@ -158,6 +158,42 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(payload["latest_batch"]["rows_read"], 10)
         self.assertEqual(payload["health"], {"status": "ok", "reasons": []})
         self.assertEqual(payload["pending_review_tasks"], 0)
+
+    def test_status_can_fail_when_health_is_unhealthy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            with closing(connect_analysis_db(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                batch_id = storage.start_import_batch("mysql", cursor_start="0")
+                storage.finish_import_batch(
+                    batch_id,
+                    "100",
+                    rows_read=10,
+                    rows_created=9,
+                    rows_skipped=0,
+                    rows_failed=1,
+                    error_summary="1 row missing raw_text",
+                )
+
+            from src.suggestion_pipeline import main
+
+            normal_output = io.StringIO()
+            with redirect_stdout(normal_output):
+                normal_exit_code = main(["status", "--db", str(db_path), "--source", "mysql"])
+
+            failing_output = io.StringIO()
+            with redirect_stdout(failing_output):
+                failing_exit_code = main(
+                    ["status", "--db", str(db_path), "--source", "mysql", "--fail-on-unhealthy"]
+                )
+
+        normal_payload = json.loads(normal_output.getvalue())
+        failing_payload = json.loads(failing_output.getvalue())
+        self.assertEqual(normal_exit_code, 0)
+        self.assertEqual(failing_exit_code, 1)
+        self.assertEqual(normal_payload["health"]["status"], "attention")
+        self.assertEqual(failing_payload["health"]["status"], "attention")
 
     def test_export_db_results_writes_persisted_reports(self):
         with tempfile.TemporaryDirectory() as directory:

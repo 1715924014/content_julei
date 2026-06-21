@@ -463,6 +463,11 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status", help="Print import status summary as JSON")
     status_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     status_parser.add_argument("--source", default="mysql", help="Import source name")
+    status_parser.add_argument(
+        "--fail-on-unhealthy",
+        action="store_true",
+        help="Return exit code 1 when health.status is not ok",
+    )
 
     export_db_parser = subparsers.add_parser("export-db-results", help="Export persisted analysis results to CSV files")
     export_db_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
@@ -535,6 +540,8 @@ def main(argv: list[str] | None = None) -> int:
             storage.initialize_schema()
             summary = storage.get_import_status_summary(args.source)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
+        if args.fail_on_unhealthy and summary["health"]["status"] != "ok":
+            return 1
         return 0
     if args.command == "export-db-results":
         summary = export_db_results(args.db, args.output_dir)
