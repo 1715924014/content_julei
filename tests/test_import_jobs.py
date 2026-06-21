@@ -1,10 +1,12 @@
 import json
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.import_jobs import run_daily_mysql_job
+from src.storage import Storage, connect_analysis_db
 
 
 class ImportJobTests(unittest.TestCase):
@@ -78,6 +80,50 @@ class ImportJobTests(unittest.TestCase):
         self.assertTrue(payload["stale_lock_replaced"])
         self.assertFalse(lock_exists_after_run)
         import_batch.assert_called_once()
+
+    def test_daily_mysql_job_log_includes_import_health_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+
+            def write_success_batch(**_kwargs):
+                with closing(connect_analysis_db(db_path)) as connection:
+                    storage = Storage(connection)
+                    storage.initialize_schema()
+                    batch_id = storage.start_import_batch("mysql", cursor_start="100")
+                    storage.finish_import_batch(
+                        batch_id,
+                        "125",
+                        rows_read=10,
+                        rows_created=10,
+                        rows_skipped=0,
+                        rows_failed=0,
+                    )
+                return Mock(
+                    batch_id=batch_id,
+                    rows_read=10,
+                    rows_created=10,
+                    rows_skipped=0,
+                    rows_failed=0,
+                    cursor_start="100",
+                    cursor_end="125",
+                    error_summary="",
+                )
+
+            with patch("src.import_jobs.import_mysql_batch", side_effect=write_success_batch):
+                exit_code = run_daily_mysql_job(
+                    config_path=Path("config/mysql.json"),
+                    db_path=db_path,
+                    log_dir=Path(directory),
+                    limit=1000,
+                    cursor_override=None,
+                )
+                logs = list(Path(directory).glob("daily-mysql-*.json"))
+                payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["health"], {"status": "ok", "reasons": []})
+        self.assertEqual(payload["pending_review_tasks"], 0)
+        self.assertEqual(payload["latest_successful_cursor"], "125")
 
     def test_daily_mysql_job_writes_success_log(self):
         batch = Mock(

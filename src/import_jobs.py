@@ -134,6 +134,18 @@ def run_daily_mysql_job(
                         "error_summary": getattr(batch, "error_summary", ""),
                     }
                 )
+                try:
+                    with closing(connect_analysis_db(db_path)) as connection:
+                        summary = Storage(connection).get_import_status_summary("mysql")
+                    payload.update(
+                        {
+                            "health": summary["health"],
+                            "pending_review_tasks": summary["pending_review_tasks"],
+                            "latest_successful_cursor": summary["latest_successful_cursor"],
+                        }
+                    )
+                except Exception as exc:
+                    payload["health_summary_error"] = str(exc)
                 exit_code = 1 if has_failed_rows else 0
             except Exception as exc:
                 payload.update(

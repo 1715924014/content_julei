@@ -46,6 +46,8 @@ python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.jso
 
 Daily job status and exit codes: `status=success` returns `0`; `status=partial` returns `1` when imported rows contain failures; `status=failed` returns `1` when the job aborts before completing. The JSON log is written under `logs/daily-mysql-*.json`.
 
+Daily job logs include the post-import `health`, `pending_review_tasks`, and `latest_successful_cursor` fields when the status summary can be read. If summary capture fails, the import result is preserved and `health_summary_error` is written for troubleshooting.
+
 A `daily-mysql.lock` file in the log directory prevents overlapping scheduled runs. If a new run sees this lock, it writes a failed job log and exits with code `1` without importing. Locks older than 6 hours are treated as stale and replaced automatically; the job log records `stale_lock_replaced=true`. Only remove a fresh lock manually after confirming no daily import process is still running.
 
 Production SQLite connections use WAL mode and a 30-second busy timeout to reduce read/write contention during daily imports and status checks.
