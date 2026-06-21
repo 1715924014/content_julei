@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import time
+from datetime import datetime, timezone
 from contextlib import closing
 from pathlib import Path
 
@@ -11,6 +12,9 @@ from src.batch import BatchResult, run_rows_import_batch
 from src.config import load_app_config
 from src.mysql_source import connect_mysql, fetch_incremental_rows
 from src.storage import Storage, utc_now
+
+
+STALE_DAILY_LOCK_SECONDS = 6 * 60 * 60
 
 
 def import_mysql_batch(
@@ -43,6 +47,20 @@ def import_mysql_batch(
         )
 
 
+def is_stale_daily_lock(lock_path: Path, now_iso: str) -> bool:
+    try:
+        locked_at_text = lock_path.read_text(encoding="utf-8").strip()
+        locked_at = datetime.fromisoformat(locked_at_text)
+        now = datetime.fromisoformat(now_iso)
+    except (OSError, ValueError):
+        return False
+    if locked_at.tzinfo is None:
+        locked_at = locked_at.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return (now - locked_at).total_seconds() > STALE_DAILY_LOCK_SECONDS
+
+
 def run_daily_mysql_job(
     *,
     config_path: Path,
@@ -67,22 +85,35 @@ def run_daily_mysql_job(
     }
     lock_path = log_dir / "daily-mysql.lock"
     lock_acquired = False
+    stale_lock_replaced = False
     try:
-        try:
-            lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            payload.update(
-                {
-                    "status": "failed",
-                    "error": "another daily MySQL job is already running",
-                    "error_summary": "another daily MySQL job is already running",
-                }
-            )
-            exit_code = 1
-        else:
+        while True:
+            try:
+                lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                break
+            except FileExistsError:
+                if is_stale_daily_lock(lock_path, started_at):
+                    try:
+                        lock_path.unlink()
+                    except FileNotFoundError:
+                        pass
+                    stale_lock_replaced = True
+                    continue
+                payload.update(
+                    {
+                        "status": "failed",
+                        "error": "another daily MySQL job is already running",
+                        "error_summary": "another daily MySQL job is already running",
+                    }
+                )
+                exit_code = 1
+                lock_fd = None
+                break
+        if lock_fd is not None:
             with os.fdopen(lock_fd, "w", encoding="utf-8") as lock_file:
                 lock_file.write(started_at)
             lock_acquired = True
+            payload["stale_lock_replaced"] = stale_lock_replaced
             try:
                 batch = import_mysql_batch(
                     config_path=config_path,

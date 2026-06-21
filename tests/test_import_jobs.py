@@ -44,6 +44,41 @@ class ImportJobTests(unittest.TestCase):
         self.assertTrue(lock_exists_after_run)
         import_batch.assert_not_called()
 
+    def test_daily_mysql_job_replaces_stale_lock_and_runs(self):
+        batch = Mock(
+            batch_id=10,
+            rows_read=1,
+            rows_created=1,
+            rows_skipped=0,
+            rows_failed=0,
+            cursor_start="100",
+            cursor_end="101",
+            error_summary="",
+        )
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.import_mysql_batch",
+            return_value=batch,
+        ) as import_batch:
+            lock_path = Path(directory) / "daily-mysql.lock"
+            lock_path.write_text("2000-01-01T00:00:00+00:00", encoding="utf-8")
+
+            exit_code = run_daily_mysql_job(
+                config_path=Path("config/mysql.json"),
+                db_path=Path("data/analysis.db"),
+                log_dir=Path(directory),
+                limit=1000,
+                cursor_override=None,
+            )
+            logs = list(Path(directory).glob("daily-mysql-*.json"))
+            payload = json.loads(logs[0].read_text(encoding="utf-8"))
+            lock_exists_after_run = lock_path.exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["status"], "success")
+        self.assertTrue(payload["stale_lock_replaced"])
+        self.assertFalse(lock_exists_after_run)
+        import_batch.assert_called_once()
+
     def test_daily_mysql_job_writes_success_log(self):
         batch = Mock(
             batch_id=7,
