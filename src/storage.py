@@ -37,6 +37,14 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def connect_analysis_db(path: str | Path) -> sqlite3.Connection:
+    connection = sqlite3.connect(path, timeout=30)
+    connection.execute("PRAGMA busy_timeout = 30000")
+    connection.execute("PRAGMA journal_mode = WAL")
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
 class Storage:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection

@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import sqlite3
 from collections import Counter
 from contextlib import closing
 from pathlib import Path
@@ -15,7 +14,7 @@ from src.doctor import run_doctor_checks
 from src.domain import ANALYSIS_FIELDS, INPUT_FIELDS, STATUS_TO_ANALYZE, Cluster, Suggestion
 from src.import_jobs import import_mysql_batch, run_daily_mysql_job
 from src.reporting import action_item_rows, build_weekly_report, cluster_output_rows, suggestion_output_rows
-from src.storage import Storage
+from src.storage import Storage, connect_analysis_db
 from src.text_processing import text_features, validate_suggestion
 
 
@@ -283,7 +282,7 @@ def analyze_file(input_path: Path, output_dir: Path) -> None:
 
 
 def export_review_tasks(db_path: Path, output: Path) -> int:
-    with closing(sqlite3.connect(db_path)) as connection:
+    with closing(connect_analysis_db(db_path)) as connection:
         storage = Storage(connection)
         storage.initialize_schema()
         tasks = storage.list_pending_review_tasks()
@@ -299,7 +298,7 @@ def export_review_tasks(db_path: Path, output: Path) -> int:
 
 
 def export_import_failures(db_path: Path, batch_id: int, output: Path) -> int:
-    with closing(sqlite3.connect(db_path)) as connection:
+    with closing(connect_analysis_db(db_path)) as connection:
         storage = Storage(connection)
         storage.initialize_schema()
         failures = storage.list_import_failures(batch_id)
@@ -381,7 +380,7 @@ def build_persisted_weekly_report(
 
 
 def export_db_results(db_path: Path, output_dir: Path) -> dict[str, int]:
-    with closing(sqlite3.connect(db_path)) as connection:
+    with closing(connect_analysis_db(db_path)) as connection:
         storage = Storage(connection)
         storage.initialize_schema()
         suggestion_rows = storage.list_persisted_suggestion_export_rows()
@@ -422,7 +421,7 @@ def import_review_results(db_path: Path, input_path: Path) -> dict[str, int]:
         rows = list(reader)
 
     summary = {"applied": 0, "skipped": 0, "failed": 0}
-    with closing(sqlite3.connect(db_path)) as connection:
+    with closing(connect_analysis_db(db_path)) as connection:
         storage = Storage(connection)
         storage.initialize_schema()
         for row in rows:
@@ -522,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "init-db":
         args.db.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(args.db)) as connection:
+        with closing(connect_analysis_db(args.db)) as connection:
             Storage(connection).initialize_schema()
         print(f"Initialized database: {args.db}")
         return 0
@@ -531,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report["status"] == "success" else 1
     if args.command == "status":
-        with closing(sqlite3.connect(args.db)) as connection:
+        with closing(connect_analysis_db(args.db)) as connection:
             storage = Storage(connection)
             storage.initialize_schema()
             summary = storage.get_import_status_summary(args.source)
@@ -562,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if summary["failed"] == 0 else 1
     if args.command == "import-csv":
-        with closing(sqlite3.connect(args.db)) as connection:
+        with closing(connect_analysis_db(args.db)) as connection:
             storage = Storage(connection)
             storage.initialize_schema()
             result = run_csv_import_batch(storage, args.input)

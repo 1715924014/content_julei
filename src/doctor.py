@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 from contextlib import closing
 from pathlib import Path
 from typing import Any
 
 from src.config import load_app_config
 from src.domain import INPUT_FIELDS
-from src.storage import Storage
+from src.storage import Storage, connect_analysis_db
 
 
 def run_doctor_checks(*, config_path: Path, db_path: Path) -> dict[str, Any]:
@@ -45,7 +44,7 @@ def run_doctor_checks(*, config_path: Path, db_path: Path) -> dict[str, Any]:
 
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(db_path)) as connection:
+        with closing(connect_analysis_db(db_path)) as connection:
             Storage(connection).initialize_schema()
         checks["database_initialized"] = True
     except Exception as exc:

@@ -48,6 +48,8 @@ Daily job status and exit codes: `status=success` returns `0`; `status=partial` 
 
 A `daily-mysql.lock` file in the log directory prevents overlapping scheduled runs. If a new run sees this lock, it writes a failed job log and exits with code `1` without importing. Locks older than 6 hours are treated as stale and replaced automatically; the job log records `stale_lock_replaced=true`. Only remove a fresh lock manually after confirming no daily import process is still running.
 
+Production SQLite connections use WAL mode and a 30-second busy timeout to reduce read/write contention during daily imports and status checks.
+
 ## 运行后检查
 
 查看最近导入批次、最新成功游标和核心表数量：

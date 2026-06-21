@@ -1,8 +1,25 @@
 import sqlite3
+import tempfile
 import unittest
 import json
+from contextlib import closing
+from pathlib import Path
 
-from src.storage import Storage
+from src.storage import Storage, connect_analysis_db
+
+
+class StorageConnectionTests(unittest.TestCase):
+    def test_connect_analysis_db_enables_wal_and_busy_timeout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            with closing(connect_analysis_db(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                busy_timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
+                journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+
+        self.assertGreaterEqual(busy_timeout, 30000)
+        self.assertEqual(journal_mode.lower(), "wal")
 
 
 class StorageTests(unittest.TestCase):

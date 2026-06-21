@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 import time
 from datetime import datetime, timezone
 from contextlib import closing
@@ -11,7 +10,7 @@ from pathlib import Path
 from src.batch import BatchResult, run_rows_import_batch
 from src.config import load_app_config
 from src.mysql_source import connect_mysql, fetch_incremental_rows
-from src.storage import Storage, utc_now
+from src.storage import Storage, connect_analysis_db, utc_now
 
 
 STALE_DAILY_LOCK_SECONDS = 6 * 60 * 60
@@ -25,7 +24,7 @@ def import_mysql_batch(
     limit: int | None = None,
 ) -> BatchResult:
     config = load_app_config(config_path)
-    with closing(sqlite3.connect(db_path)) as connection:
+    with closing(connect_analysis_db(db_path)) as connection:
         storage = Storage(connection)
         storage.initialize_schema()
         cursor_start = cursor_override
