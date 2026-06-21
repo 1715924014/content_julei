@@ -24,6 +24,7 @@ SOURCE_SUGGESTION_FIELDS = [
 COUNTABLE_TABLES = {
     "source_suggestions",
     "import_batches",
+    "import_failures",
     "suggestion_analysis",
     "issue_clusters",
     "cluster_members",
@@ -61,6 +62,18 @@ class Storage:
                 error_summary TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS import_failures (
+                import_failure_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id INTEGER NOT NULL,
+                source_suggestion_id TEXT,
+                source_cursor TEXT,
+                row_number INTEGER NOT NULL,
+                error_message TEXT NOT NULL,
+                raw_row_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (batch_id) REFERENCES import_batches(batch_id)
             );
 
             CREATE TABLE IF NOT EXISTS source_suggestions (
@@ -174,6 +187,8 @@ class Storage:
                 ON import_batches(source_name, status, batch_id DESC);
             CREATE INDEX IF NOT EXISTS idx_source_suggestions_created
                 ON source_suggestions(created_at, source_suggestion_id);
+            CREATE INDEX IF NOT EXISTS idx_import_failures_batch_row
+                ON import_failures(batch_id, row_number);
             CREATE INDEX IF NOT EXISTS idx_suggestion_analysis_batch
                 ON suggestion_analysis(batch_id, source_suggestion_id);
             CREATE INDEX IF NOT EXISTS idx_issue_clusters_status_category_owner
@@ -246,6 +261,50 @@ class Storage:
             ),
         )
         self.connection.commit()
+
+    def record_import_failure(
+        self,
+        *,
+        batch_id: int,
+        source_suggestion_id: str,
+        source_cursor: str,
+        row_number: int,
+        error_message: str,
+        raw_row: dict[str, Any],
+    ) -> None:
+        now = utc_now()
+        self.connection.execute(
+            """
+            INSERT INTO import_failures (
+                batch_id, source_suggestion_id, source_cursor, row_number,
+                error_message, raw_row_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                batch_id,
+                source_suggestion_id,
+                source_cursor,
+                row_number,
+                error_message,
+                json.dumps(raw_row, ensure_ascii=False, sort_keys=True),
+                now,
+            ),
+        )
+        self.connection.commit()
+
+    def list_import_failures(self, batch_id: int) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT import_failure_id, batch_id, source_suggestion_id,
+                source_cursor, row_number, error_message, raw_row_json, created_at
+            FROM import_failures
+            WHERE batch_id = ?
+            ORDER BY row_number, import_failure_id
+            """,
+            (batch_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def get_import_batch(self, batch_id: int) -> sqlite3.Row:
         row = self.connection.execute(

@@ -197,7 +197,9 @@ def run_rows_import_batch(
     cursor_end = cursor_start
     error_summary: str | None = None
 
-    for row in rows:
+    for row_number, row in enumerate(rows, start=1):
+        source_suggestion_id = str(row.get("suggestion_id", "")).strip()
+        row_cursor = str(row.get(cursor_field) or source_suggestion_id)
         try:
             source_row = source_row_from_csv(row)
             source_suggestion_id = source_row["source_suggestion_id"]
@@ -265,6 +267,14 @@ def run_rows_import_batch(
         except Exception as exc:
             rows_failed += 1
             error_summary = str(exc)
+            storage.record_import_failure(
+                batch_id=batch_id,
+                source_suggestion_id=source_suggestion_id,
+                source_cursor=row_cursor,
+                row_number=row_number,
+                error_message=str(exc),
+                raw_row=row,
+            )
 
     storage.finish_import_batch(
         batch_id,

@@ -138,3 +138,5 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 ```
 
 确认 `latest_successful_cursor` 和核心表数量符合预期后，再恢复每日任务。
+
+Failed row details are persisted in `import_failures` with source ID, source cursor, row number, error message, and raw row JSON for replay/debugging.

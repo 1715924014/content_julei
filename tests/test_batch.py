@@ -691,6 +691,42 @@ class CsvImportBatchTests(unittest.TestCase):
         self.assertEqual(len(provider.calls), 1)
         self.assertEqual(statuses, ["embedded", "cached"])
 
+    def test_run_rows_import_batch_records_failed_row_context(self):
+        storage = self.make_storage()
+        rows = [
+            {
+                "suggestion_id": "",
+                "_source_cursor": "105",
+                "submit_date": "2026-06-16",
+                "raw_text": "",
+                "department": "Production",
+                "job_group": "Line worker",
+                "work_location": "Plant A",
+                "scenario": "Canteen",
+                "is_anonymous_for_report": "yes",
+                "status": "new",
+                "owner_department": "",
+                "resolution_note": "",
+                "closed_date": "",
+            }
+        ]
+
+        result = run_rows_import_batch(
+            storage,
+            rows,
+            source_name="mysql",
+            cursor_start="100",
+            cursor_field="_source_cursor",
+        )
+        failures = storage.list_import_failures(result.batch_id)
+
+        self.assertEqual(result.rows_failed, 1)
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0]["source_suggestion_id"], "")
+        self.assertEqual(failures[0]["source_cursor"], "105")
+        self.assertEqual(failures[0]["row_number"], 1)
+        self.assertIn("source_suggestion_id", failures[0]["error_message"])
+
     def test_empty_rows_import_batch_keeps_cursor_end_at_start(self):
         storage = self.make_storage()
 

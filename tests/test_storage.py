@@ -36,6 +36,27 @@ class StorageTests(unittest.TestCase):
 
         self.assertTrue(expected_indexes.issubset(actual_indexes))
 
+    def test_record_import_failure_persists_row_context(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="100")
+
+        storage.record_import_failure(
+            batch_id=batch_id,
+            source_suggestion_id="M001",
+            source_cursor="105",
+            row_number=3,
+            error_message="missing raw_text",
+            raw_row={"suggestion_id": "M001", "raw_text": ""},
+        )
+        failures = storage.list_import_failures(batch_id)
+
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0]["source_suggestion_id"], "M001")
+        self.assertEqual(failures[0]["source_cursor"], "105")
+        self.assertEqual(failures[0]["row_number"], 3)
+        self.assertEqual(failures[0]["error_message"], "missing raw_text")
+        self.assertIn('"raw_text": ""', failures[0]["raw_row_json"])
+
     def test_import_batch_lifecycle_stores_success_status_cursor_and_counts(self):
         storage = self.make_storage()
 
