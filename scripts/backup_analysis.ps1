@@ -21,6 +21,13 @@ if (-not (Test-Path $resolvedDbPath)) {
 
 Copy-Item -Path $resolvedDbPath -Destination (Join-Path $backupDir "analysis.db") -Force
 
+foreach ($sidecarSuffix in @("-wal", "-shm")) {
+    $sidecarPath = "$resolvedDbPath$sidecarSuffix"
+    if (Test-Path $sidecarPath) {
+        Copy-Item -Path $sidecarPath -Destination (Join-Path $backupDir "analysis.db$sidecarSuffix") -Force
+    }
+}
+
 $resolvedLogDir = Join-Path $ProjectRoot $LogDir
 if (Test-Path $resolvedLogDir) {
     Copy-Item -Path $resolvedLogDir -Destination (Join-Path $backupDir "logs") -Recurse -Force

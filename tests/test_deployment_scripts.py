@@ -26,6 +26,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("analysis.db", content)
         self.assertIn("Copy-Item", content)
         self.assertIn("logs", content)
+        self.assertIn("-wal", content)
+        self.assertIn("-shm", content)
         self.assertIn("RetentionDays", content)
         self.assertIn("Remove-Item", content)
         self.assertIn("exit 0", content)

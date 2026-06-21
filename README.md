@@ -145,4 +145,6 @@ python -m src.suggestion_pipeline import-review-results --db output_run_check/an
 powershell.exe -ExecutionPolicy Bypass -File scripts/backup_analysis.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -DbPath data\analysis.db -LogDir logs -BackupRoot backups -RetentionDays 90
 ```
 
+The backup script also copies SQLite WAL sidecar files (`analysis.db-wal` and `analysis.db-shm`) when they exist.
+
 部署检查、每日巡检、失败处理和补数恢复请参考 `docs/operations.md`。

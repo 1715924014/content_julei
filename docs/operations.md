@@ -141,6 +141,8 @@ python -m src.suggestion_pipeline import-review-results --db data/analysis.db --
 powershell.exe -ExecutionPolicy Bypass -File scripts/backup_analysis.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -DbPath data\analysis.db -LogDir logs -BackupRoot backups -RetentionDays 90
 ```
 
+The backup script also copies SQLite WAL sidecar files (`analysis.db-wal` and `analysis.db-shm`) when they exist.
+
 备份会在 `backups/yyyyMMdd-HHmmss/` 下保存 `analysis.db` 和 `logs`，并默认清理超过 `RetentionDays` 天的旧备份目录。需要暂时关闭自动清理时，可以传入 `-RetentionDays 0`。
 
 恢复时先停止每日任务，再把备份目录里的 `analysis.db` 复制回 `data/analysis.db`，随后运行：
