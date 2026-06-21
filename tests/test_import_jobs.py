@@ -8,6 +8,42 @@ from src.import_jobs import run_daily_mysql_job
 
 
 class ImportJobTests(unittest.TestCase):
+    def test_daily_mysql_job_refuses_to_run_when_lock_exists(self):
+        batch = Mock(
+            batch_id=9,
+            rows_read=1,
+            rows_created=1,
+            rows_skipped=0,
+            rows_failed=0,
+            cursor_start="100",
+            cursor_end="101",
+            error_summary="",
+        )
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.import_mysql_batch",
+            return_value=batch,
+        ) as import_batch:
+            lock_path = Path(directory) / "daily-mysql.lock"
+            lock_path.write_text("existing job", encoding="utf-8")
+
+            exit_code = run_daily_mysql_job(
+                config_path=Path("config/mysql.json"),
+                db_path=Path("data/analysis.db"),
+                log_dir=Path(directory),
+                limit=1000,
+                cursor_override=None,
+            )
+            logs = list(Path(directory).glob("daily-mysql-*.json"))
+            payload = json.loads(logs[0].read_text(encoding="utf-8"))
+            lock_exists_after_run = lock_path.exists()
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["error"], "another daily MySQL job is already running")
+        self.assertTrue(lock_exists_after_run)
+        import_batch.assert_not_called()
+
     def test_daily_mysql_job_writes_success_log(self):
         batch = Mock(
             batch_id=7,

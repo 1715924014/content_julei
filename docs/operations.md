@@ -46,6 +46,8 @@ python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.jso
 
 Daily job status and exit codes: `status=success` returns `0`; `status=partial` returns `1` when imported rows contain failures; `status=failed` returns `1` when the job aborts before completing. The JSON log is written under `logs/daily-mysql-*.json`.
 
+A `daily-mysql.lock` file in the log directory prevents overlapping scheduled runs. If a new run sees this lock, it writes a failed job log and exits with code `1` without importing. Only remove the lock manually after confirming no daily import process is still running.
+
 ## 运行后检查
 
 查看最近导入批次、最新成功游标和核心表数量：
