@@ -11,6 +11,18 @@ from src.domain import INPUT_FIELDS
 from src.storage import Storage
 
 
+class CountingEmbeddingProvider:
+    model_name = "counting-test"
+    dimensions = 2
+
+    def __init__(self):
+        self.calls: list[str] = []
+
+    def embed(self, text: str) -> list[float]:
+        self.calls.append(text)
+        return [1.0, 0.0]
+
+
 class CsvImportBatchTests(unittest.TestCase):
     def make_storage(self):
         storage = Storage(sqlite3.connect(":memory:"))
@@ -620,6 +632,64 @@ class CsvImportBatchTests(unittest.TestCase):
         batch = storage.get_import_batch(result.batch_id)
 
         self.assertEqual(batch["cursor_end"], "110")
+
+    def test_run_rows_import_batch_reuses_embedding_by_content_hash(self):
+        storage = self.make_storage()
+        provider = CountingEmbeddingProvider()
+        rows = [
+            {
+                "suggestion_id": "M001",
+                "_source_cursor": "101",
+                "submit_date": "2026-06-16",
+                "raw_text": "Night shift canteen meals are cold",
+                "department": "Production",
+                "job_group": "Line worker",
+                "work_location": "Plant A",
+                "scenario": "Canteen",
+                "is_anonymous_for_report": "yes",
+                "status": "new",
+                "owner_department": "",
+                "resolution_note": "",
+                "closed_date": "",
+            },
+            {
+                "suggestion_id": "M002",
+                "_source_cursor": "102",
+                "submit_date": "2026-06-16",
+                "raw_text": " Night shift canteen meals are cold ",
+                "department": "Production",
+                "job_group": "Line worker",
+                "work_location": "Plant A",
+                "scenario": "Canteen",
+                "is_anonymous_for_report": "yes",
+                "status": "new",
+                "owner_department": "",
+                "resolution_note": "",
+                "closed_date": "",
+            },
+        ]
+
+        run_rows_import_batch(
+            storage,
+            rows,
+            source_name="mysql",
+            cursor_start="100",
+            cursor_field="_source_cursor",
+            embedding_provider=provider,
+        )
+        statuses = [
+            row["embedding_status"]
+            for row in storage.connection.execute(
+                """
+                SELECT embedding_status
+                FROM suggestion_analysis
+                ORDER BY source_suggestion_id
+                """
+            ).fetchall()
+        ]
+
+        self.assertEqual(len(provider.calls), 1)
+        self.assertEqual(statuses, ["embedded", "cached"])
 
     def test_empty_rows_import_batch_keeps_cursor_end_at_start(self):
         storage = self.make_storage()

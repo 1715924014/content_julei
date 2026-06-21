@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -184,9 +185,11 @@ def run_rows_import_batch(
     source_name: str,
     cursor_start: str = "0",
     cursor_field: str = "suggestion_id",
+    embedding_provider: object | None = None,
 ) -> BatchResult:
     batch_id = storage.start_import_batch(source_name, cursor_start=cursor_start)
-    embedding_provider = HashEmbeddingProvider()
+    if embedding_provider is None:
+        embedding_provider = HashEmbeddingProvider()
     seen_hashes: set[str] = set()
     rows_created = 0
     rows_skipped = 0
@@ -220,21 +223,28 @@ def run_rows_import_batch(
             review_required = "是" if flags or confidence < 0.6 or quality in {"信息不足", "情绪表达"} else "否"
 
             normalized_text = normalize_text(suggestion.raw_text)
-            embedding = embedding_provider.embed(normalized_text)
+            row_content_hash = content_hash(suggestion.raw_text)
+            cached_embedding = storage.get_cached_embedding_by_content_hash(row_content_hash)
+            if cached_embedding is None:
+                embedding = embedding_provider.embed(normalized_text)
+                embedding_status = "embedded"
+            else:
+                embedding = cached_embedding
+                embedding_status = "cached"
             analysis_row = {
                 "source_suggestion_id": source_suggestion_id,
                 "batch_id": batch_id,
                 "normalized_text": normalized_text,
-                "content_hash": content_hash(suggestion.raw_text),
+                "content_hash": row_content_hash,
                 "primary_category": primary,
                 "secondary_category": secondary,
                 "owner_department": suggestion.fields.get("owner_department", "") or owner,
                 "quality_type": quality,
                 "urgency_level": urgency,
                 "classification_confidence": confidence,
-                "embedding_status": "embedded",
+                "embedding_status": embedding_status,
                 "embedding_model": embedding_provider.model_name,
-                "embedding_ref": None,
+                "embedding_ref": json.dumps(embedding),
                 "review_required": review_required,
                 "analysis_status": "classified",
             }

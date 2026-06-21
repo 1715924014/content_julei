@@ -17,6 +17,14 @@ class GitIgnoreTests(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 self.assertIn(pattern, content)
 
+    def test_local_ime_state_files_are_ignored(self):
+        content = Path(".gitignore").read_text(encoding="utf-8")
+
+        for pattern in ["/inputstat.dat", "/sgim_punc.bin", "/*.stat", "/*user.config", "/*share.config"]:
+            with self.subTest(pattern=pattern):
+                self.assertIn(pattern, content)
+
+
 
 if __name__ == "__main__":
     unittest.main()

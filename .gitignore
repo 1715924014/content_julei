@@ -15,3 +15,10 @@ output_run_check/
 *.db
 *.sqlite
 *.sqlite3
+# Local IME/editor state files
+/inputstat.dat
+/sgim_punc.bin
+/*.stat
+/*user.config
+/*share.config
+

@@ -469,6 +469,30 @@ class Storage:
         )
         self.connection.commit()
 
+    def get_cached_embedding_by_content_hash(self, content_hash_value: str) -> list[float] | None:
+        row = self.connection.execute(
+            """
+            SELECT embedding_ref
+            FROM suggestion_analysis
+            WHERE content_hash = ?
+                AND embedding_status IN ('embedded', 'cached')
+                AND embedding_ref IS NOT NULL
+                AND embedding_ref <> ''
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (content_hash_value,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            values = json.loads(row["embedding_ref"])
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(values, list):
+            return None
+        return [float(value) for value in values]
+
     def list_active_cluster_vectors(self) -> list[ClusterVector]:
         rows = self.connection.execute(
             """

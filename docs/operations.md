@@ -67,6 +67,8 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 
 导出当前分析结果，供业务查看和归档：
 
+Embedding cache: repeated or equivalent text reuses stored `embedding_ref` by `content_hash`, reducing vector computation during daily imports.
+
 ```powershell
 python -m src.suggestion_pipeline export-db-results --db data/analysis.db --output-dir data/reports
 ```
