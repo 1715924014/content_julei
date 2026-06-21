@@ -3,6 +3,7 @@ param(
     [string]$ConfigPath = "config\mysql.example.json",
     [string]$DbPath = "data\analysis.db",
     [string]$LogDir = "logs",
+    [string]$BackupRoot = "backups",
     [int]$Limit = 10000,
     [string]$PythonCommand = "python"
 )
@@ -17,7 +18,8 @@ Set-Location $ProjectRoot
 
 & $PythonCommand -m src.suggestion_pipeline doctor `
     --config $ConfigPath `
-    --db $DbPath
+    --db $DbPath `
+    --backup-root $BackupRoot
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

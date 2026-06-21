@@ -36,7 +36,7 @@ Passing `--backup-root` makes `doctor` verify that the backup directory can be c
 Windows 任务计划程序建议调用脚本入口：
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -ConfigPath config\mysql.prod.json -DbPath data\analysis.db -LogDir logs -Limit 10000
+powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -ConfigPath config\mysql.prod.json -DbPath data\analysis.db -LogDir logs -BackupRoot backups -Limit 10000
 ```
 
 脚本内部会调用：

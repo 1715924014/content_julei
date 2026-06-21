@@ -13,6 +13,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("run-daily-mysql", content)
         self.assertIn("exit $LASTEXITCODE", content)
         self.assertIn("MINI_PROGRAM_DB_PASSWORD", content)
+        self.assertIn("$BackupRoot", content)
+        self.assertIn("--backup-root", content)
         self.assertLess(content.index("doctor"), content.index("run-daily-mysql"))
 
     def test_backup_script_copies_database_and_logs(self):
