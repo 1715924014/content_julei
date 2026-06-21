@@ -71,9 +71,10 @@ def run_daily_mysql_job(
             cursor_override=cursor_override,
             limit=limit,
         )
+        has_failed_rows = batch.rows_failed > 0
         payload.update(
             {
-                "status": "success",
+                "status": "partial" if has_failed_rows else "success",
                 "batch_id": batch.batch_id,
                 "rows_read": batch.rows_read,
                 "rows_created": batch.rows_created,
@@ -84,7 +85,7 @@ def run_daily_mysql_job(
                 "error_summary": getattr(batch, "error_summary", ""),
             }
         )
-        exit_code = 0
+        exit_code = 1 if has_failed_rows else 0
     except Exception as exc:
         payload.update(
             {

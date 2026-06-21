@@ -53,6 +53,38 @@ class ImportJobTests(unittest.TestCase):
             limit=1000,
         )
 
+    def test_daily_mysql_job_returns_error_code_for_partial_batch(self):
+        batch = Mock(
+            batch_id=8,
+            rows_read=10,
+            rows_created=7,
+            rows_skipped=1,
+            rows_failed=2,
+            cursor_start="100",
+            cursor_end="125",
+            error_summary="2 rows missing raw_text",
+        )
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.import_mysql_batch",
+            return_value=batch,
+        ):
+            exit_code = run_daily_mysql_job(
+                config_path=Path("config/mysql.json"),
+                db_path=Path("data/analysis.db"),
+                log_dir=Path(directory),
+                limit=1000,
+                cursor_override=None,
+            )
+            logs = list(Path(directory).glob("daily-mysql-*.json"))
+            payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(payload["status"], "partial")
+        self.assertEqual(payload["batch_id"], 8)
+        self.assertEqual(payload["rows_failed"], 2)
+        self.assertEqual(payload["error_summary"], "2 rows missing raw_text")
+
     def test_daily_mysql_job_writes_failure_log_and_returns_error_code(self):
         with tempfile.TemporaryDirectory() as directory, patch(
             "src.import_jobs.import_mysql_batch",

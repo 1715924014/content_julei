@@ -44,7 +44,7 @@ python -m src.suggestion_pipeline doctor --config config\mysql.prod.json --db da
 python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.json --db data\analysis.db --log-dir logs --limit 10000
 ```
 
-脚本会先运行 `doctor`，预检失败时直接返回非 0，不继续导入。任务成功时退出码为 `0`；导入失败时退出码为 `1`，并在 `logs` 目录写入 `daily-mysql-*.json` 日志。
+Daily job status and exit codes: `status=success` returns `0`; `status=partial` returns `1` when imported rows contain failures; `status=failed` returns `1` when the job aborts before completing. The JSON log is written under `logs/daily-mysql-*.json`.
 
 ## 运行后检查
 
