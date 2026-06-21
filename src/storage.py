@@ -343,15 +343,44 @@ class Storage:
             """,
             (source_name,),
         ).fetchone()
+        latest_batch_dict = dict(latest_batch) if latest_batch is not None else None
+        pending_review_tasks = self.count_pending_review_tasks()
         return {
             "source_name": source_name,
             "latest_successful_cursor": self.get_latest_successful_cursor(source_name),
-            "latest_batch": dict(latest_batch) if latest_batch is not None else None,
+            "latest_batch": latest_batch_dict,
+            "pending_review_tasks": pending_review_tasks,
+            "health": self.build_import_health(latest_batch_dict, pending_review_tasks),
             "table_counts": {
                 table_name: self.count_table(table_name)
                 for table_name in sorted(COUNTABLE_TABLES)
             },
         }
+
+    def count_pending_review_tasks(self) -> int:
+        row = self.connection.execute(
+            "SELECT COUNT(*) AS count FROM review_tasks WHERE status = 'pending'"
+        ).fetchone()
+        return int(row["count"] or 0)
+
+    def build_import_health(
+        self,
+        latest_batch: dict[str, Any] | None,
+        pending_review_tasks: int,
+    ) -> dict[str, Any]:
+        reasons: list[str] = []
+        status = "ok"
+        if latest_batch is None:
+            reasons.append("no_import_batches")
+            status = "warning"
+        elif latest_batch.get("status") in {"partial", "failed"} or int(latest_batch.get("rows_failed") or 0) > 0:
+            reasons.append("latest_batch_has_failed_rows")
+            status = "attention"
+        if pending_review_tasks > 0:
+            reasons.append("pending_review_tasks")
+            if status == "ok":
+                status = "warning"
+        return {"status": status, "reasons": reasons}
 
     def upsert_source_suggestion(self, row: dict[str, Any], import_batch_id: int | None = None) -> bool:
         source_suggestion_id = str(row.get("source_suggestion_id", "")).strip()

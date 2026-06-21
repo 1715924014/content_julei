@@ -188,6 +188,64 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(summary["latest_successful_cursor"], "100")
         self.assertEqual(summary["table_counts"]["import_batches"], 2)
         self.assertEqual(summary["table_counts"]["source_suggestions"], 1)
+        self.assertEqual(summary["health"]["status"], "attention")
+        self.assertIn("latest_batch_has_failed_rows", summary["health"]["reasons"])
+
+    def test_import_status_summary_warns_when_review_tasks_are_pending(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="0")
+        storage.finish_import_batch(
+            batch_id,
+            "100",
+            rows_read=10,
+            rows_created=10,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+        storage.upsert_source_suggestion(
+            {
+                "source_suggestion_id": "M002",
+                "submit_date": "2026-06-16",
+                "created_at": "2026-06-16",
+                "raw_text": "Need clearer shift handover",
+                "department": "Production",
+                "job_group": "Operator",
+                "work_location": "Plant A",
+                "scenario": "Shift",
+                "status": "new",
+                "owner_department": "Production",
+            }
+        )
+        storage.create_review_task(
+            source_suggestion_id="M002",
+            candidate_cluster_id=None,
+            task_type="manual_cluster_review",
+            priority=90,
+            evidence={"reason": "low confidence"},
+        )
+
+        summary = storage.get_import_status_summary("mysql")
+
+        self.assertEqual(summary["pending_review_tasks"], 1)
+        self.assertEqual(summary["health"]["status"], "warning")
+        self.assertIn("pending_review_tasks", summary["health"]["reasons"])
+
+    def test_import_status_summary_reports_ok_health_when_import_is_clean(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="0")
+        storage.finish_import_batch(
+            batch_id,
+            "100",
+            rows_read=10,
+            rows_created=10,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+
+        summary = storage.get_import_status_summary("mysql")
+
+        self.assertEqual(summary["pending_review_tasks"], 0)
+        self.assertEqual(summary["health"], {"status": "ok", "reasons": []})
 
     def test_source_suggestion_upsert_is_idempotent_for_same_classification_fields(self):
         storage = self.make_storage()

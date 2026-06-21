@@ -156,6 +156,8 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(payload["source_name"], "mysql")
         self.assertEqual(payload["latest_successful_cursor"], "100")
         self.assertEqual(payload["latest_batch"]["rows_read"], 10)
+        self.assertEqual(payload["health"], {"status": "ok", "reasons": []})
+        self.assertEqual(payload["pending_review_tasks"], 0)
 
     def test_export_db_results_writes_persisted_reports(self):
         with tempfile.TemporaryDirectory() as directory:
