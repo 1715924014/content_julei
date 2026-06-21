@@ -110,6 +110,12 @@ powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -Projec
 python -m src.suggestion_pipeline status --db output_run_check/analysis.db --source mysql
 ```
 
+If the latest batch reports failed rows, export the persisted row-level failure details for repair or replay:
+
+```powershell
+python -m src.suggestion_pipeline export-import-failures --db output_run_check/analysis.db --batch-id <batch_id> --output output_run_check/import_failures.csv
+```
+
 从增量分析库导出当前业务结果，生成 `suggestions_analyzed.csv`、`clusters.csv`、`action_items.csv` 和 `weekly_report.md`：
 
 ```powershell

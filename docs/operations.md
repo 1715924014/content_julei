@@ -139,4 +139,10 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 
 确认 `latest_successful_cursor` 和核心表数量符合预期后，再恢复每日任务。
 
-Failed row details are persisted in `import_failures` with source ID, source cursor, row number, error message, and raw row JSON for replay/debugging.
+Failed row details are persisted in `import_failures` with source ID, source cursor, row number, error message, and raw row JSON for replay/debugging. Export them for a specific batch when `rows_failed > 0`:
+
+```powershell
+python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --batch-id <batch_id> --output data/import_failures.csv
+```
+
+Use the exported CSV to fix source records or replay the affected cursor range after configuration changes.

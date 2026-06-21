@@ -285,6 +285,51 @@ class SuggestionPipelineTests(unittest.TestCase):
             self.assertEqual(rows[0]["target_cluster_id"], "")
             self.assertEqual(rows[0]["reviewed_by"], "")
 
+    def test_export_import_failures_writes_failed_rows_to_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            output_path = Path(directory) / "import_failures.csv"
+            with closing(sqlite3.connect(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                batch_id = storage.start_import_batch(
+                    source_name="mysql",
+                    cursor_start="100",
+                )
+                storage.record_import_failure(
+                    batch_id=batch_id,
+                    source_suggestion_id="S002",
+                    source_cursor="102",
+                    row_number=2,
+                    error_message="missing raw_text",
+                    raw_row={"id": 102, "department": "Production"},
+                )
+
+            from src.suggestion_pipeline import main
+
+            exit_code = main(
+                [
+                    "export-import-failures",
+                    "--db",
+                    str(db_path),
+                    "--batch-id",
+                    str(batch_id),
+                    "--output",
+                    str(output_path),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            with output_path.open("r", encoding="utf-8-sig", newline="") as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["batch_id"], str(batch_id))
+            self.assertEqual(rows[0]["source_suggestion_id"], "S002")
+            self.assertEqual(rows[0]["source_cursor"], "102")
+            self.assertEqual(rows[0]["row_number"], "2")
+            self.assertEqual(rows[0]["error_message"], "missing raw_text")
+            self.assertEqual(rows[0]["raw_row_json"], '{"department": "Production", "id": 102}')
+
     def test_import_review_results_applies_csv_decisions(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "analysis.db"

@@ -40,6 +40,17 @@ REVIEW_TASK_EXPORT_FIELDS = [
     "created_at",
 ]
 
+IMPORT_FAILURE_EXPORT_FIELDS = [
+    "import_failure_id",
+    "batch_id",
+    "source_suggestion_id",
+    "source_cursor",
+    "row_number",
+    "error_message",
+    "raw_row_json",
+    "created_at",
+]
+
 PERSISTED_SUGGESTION_EXPORT_FIELDS = ["source_suggestion_id"] + INPUT_FIELDS + ANALYSIS_FIELDS
 
 PERSISTED_CLUSTER_EXPORT_FIELDS = [
@@ -287,6 +298,16 @@ def export_review_tasks(db_path: Path, output: Path) -> int:
     return len(rows)
 
 
+def export_import_failures(db_path: Path, batch_id: int, output: Path) -> int:
+    with closing(sqlite3.connect(db_path)) as connection:
+        storage = Storage(connection)
+        storage.initialize_schema()
+        failures = storage.list_import_failures(batch_id)
+    rows = stringify_rows(failures, IMPORT_FAILURE_EXPORT_FIELDS)
+    write_csv(output, IMPORT_FAILURE_EXPORT_FIELDS, rows)
+    return len(rows)
+
+
 def stringify_rows(rows: Iterable[dict[str, object]], fieldnames: list[str]) -> list[dict[str, str]]:
     return [
         {
@@ -452,6 +473,11 @@ def build_parser() -> argparse.ArgumentParser:
     export_review_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     export_review_parser.add_argument("--output", required=True, type=Path, help="Pending review tasks CSV output path")
 
+    export_failure_parser = subparsers.add_parser("export-import-failures", help="Export failed import rows to CSV")
+    export_failure_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    export_failure_parser.add_argument("--batch-id", required=True, type=int, help="Import batch id to inspect")
+    export_failure_parser.add_argument("--output", required=True, type=Path, help="Failed import rows CSV output path")
+
     import_review_parser = subparsers.add_parser("import-review-results", help="Import reviewed task decisions from CSV")
     import_review_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
     import_review_parser.add_argument("--input", required=True, type=Path, help="Reviewed task decisions CSV input path")
@@ -523,6 +549,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export-review-tasks":
         exported = export_review_tasks(args.db, args.output)
         print(f"Exported pending review tasks: {exported} -> {args.output}")
+        return 0
+    if args.command == "export-import-failures":
+        exported = export_import_failures(args.db, args.batch_id, args.output)
+        print(f"Exported import failures: {exported} -> {args.output}")
         return 0
     if args.command == "import-review-results":
         summary = import_review_results(args.db, args.input)
