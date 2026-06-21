@@ -48,6 +48,26 @@ class DoctorTests(unittest.TestCase):
         self.assertTrue(report["checks"]["database_initialized"])
         self.assertTrue(report["checks"]["field_mapping_complete"])
 
+    def test_doctor_checks_backup_root_when_provided(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            "os.environ",
+            {"MINI_PROGRAM_DB_PASSWORD": "secret"},
+        ):
+            config_path = self.write_config(directory)
+            db_path = Path(directory) / "analysis.db"
+            backup_root = Path(directory) / "backups"
+
+            report = run_doctor_checks(
+                config_path=config_path,
+                db_path=db_path,
+                backup_root=backup_root,
+            )
+            backup_root_exists = backup_root.exists()
+
+        self.assertEqual(report["status"], "success")
+        self.assertTrue(report["checks"]["backup_root_writable"])
+        self.assertTrue(backup_root_exists)
+
     def test_doctor_fails_when_password_env_is_missing(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict("os.environ", {}, clear=True):
             config_path = self.write_config(directory)

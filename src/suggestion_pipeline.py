@@ -459,6 +459,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor", help="Run local deployment preflight checks")
     doctor_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
     doctor_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
+    doctor_parser.add_argument("--backup-root", type=Path, default=None, help="Optional backup root to check for write access")
 
     status_parser = subparsers.add_parser("status", help="Print import status summary as JSON")
     status_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
@@ -531,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Initialized database: {args.db}")
         return 0
     if args.command == "doctor":
-        report = run_doctor_checks(config_path=args.config, db_path=args.db)
+        report = run_doctor_checks(config_path=args.config, db_path=args.db, backup_root=args.backup_root)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report["status"] == "success" else 1
     if args.command == "status":

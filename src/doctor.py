@@ -10,7 +10,7 @@ from src.domain import INPUT_FIELDS
 from src.storage import Storage, connect_analysis_db
 
 
-def run_doctor_checks(*, config_path: Path, db_path: Path) -> dict[str, Any]:
+def run_doctor_checks(*, config_path: Path, db_path: Path, backup_root: Path | None = None) -> dict[str, Any]:
     checks = {
         "config_loaded": False,
         "field_mapping_complete": False,
@@ -49,6 +49,17 @@ def run_doctor_checks(*, config_path: Path, db_path: Path) -> dict[str, Any]:
         checks["database_initialized"] = True
     except Exception as exc:
         issues.append(f"database initialization failed: {exc}")
+
+    if backup_root is not None:
+        checks["backup_root_writable"] = False
+        try:
+            backup_root.mkdir(parents=True, exist_ok=True)
+            probe_path = backup_root / ".doctor-write-test"
+            probe_path.write_text("ok", encoding="utf-8")
+            probe_path.unlink()
+            checks["backup_root_writable"] = True
+        except Exception as exc:
+            issues.append(f"backup root is not writable: {exc}")
 
     status = "success" if all(checks.values()) else "failed"
     return {"status": status, "checks": checks, "issues": issues}

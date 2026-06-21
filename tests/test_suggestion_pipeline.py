@@ -462,6 +462,40 @@ class SuggestionPipelineTests(unittest.TestCase):
             self.assertEqual(member["decision_status"], "accepted")
             self.assertEqual(member["reviewed_by"], "ops-user")
 
+    def test_doctor_passes_optional_backup_root(self):
+        with patch(
+            "src.suggestion_pipeline.run_doctor_checks",
+            return_value={
+                "status": "success",
+                "checks": {"backup_root_writable": True},
+                "issues": [],
+            },
+        ) as doctor:
+            from src.suggestion_pipeline import main
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "doctor",
+                        "--config",
+                        "config.json",
+                        "--db",
+                        "analysis.db",
+                        "--backup-root",
+                        "backups",
+                    ]
+                )
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["checks"]["backup_root_writable"])
+        doctor.assert_called_once_with(
+            config_path=Path("config.json"),
+            db_path=Path("analysis.db"),
+            backup_root=Path("backups"),
+        )
+
     def test_doctor_outputs_report_and_returns_failure_for_failed_checks(self):
         with patch(
             "src.suggestion_pipeline.run_doctor_checks",
@@ -480,7 +514,7 @@ class SuggestionPipelineTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(exit_code, 1)
         self.assertEqual(payload["status"], "failed")
-        doctor.assert_called_once_with(config_path=Path("config.json"), db_path=Path("analysis.db"))
+        doctor.assert_called_once_with(config_path=Path("config.json"), db_path=Path("analysis.db"), backup_root=None)
 
 
 if __name__ == "__main__":

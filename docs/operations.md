@@ -24,8 +24,10 @@ python -m src.suggestion_pipeline init-db --db data/analysis.db
 6. 运行本地预检，确认配置、字段映射、密码环境变量和分析库可用：
 
 ```powershell
-python -m src.suggestion_pipeline doctor --config config\mysql.prod.json --db data\analysis.db
+python -m src.suggestion_pipeline doctor --config config\mysql.prod.json --db data\analysis.db --backup-root backups
 ```
+
+Passing `--backup-root` makes `doctor` verify that the backup directory can be created and written before the scheduled job goes live.
 
 预检返回 `success` 才进入任务计划配置；如果返回 `failed`，先按 `issues` 修复。`field_mapping_complete` 为 `false` 时，通常表示小程序 MySQL 字段映射缺少 `suggestion_id`、`raw_text` 等必要字段。
 
