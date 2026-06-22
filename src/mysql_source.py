@@ -19,6 +19,8 @@ def build_incremental_query(
     cursor_value: str | None = None,
     limit: int | None = None,
 ) -> tuple[str, list[Any]]:
+    if limit is not None and limit <= 0:
+        raise ValueError("limit must be a positive integer")
     source_columns = sorted(set(config.field_mapping.values()) | {config.cursor_field})
     selected_columns = ", ".join(quote_identifier(column) for column in source_columns)
     query = f"SELECT {selected_columns} FROM {quote_identifier(config.table)}"

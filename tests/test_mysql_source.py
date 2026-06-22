@@ -30,6 +30,10 @@ class MySQLSourceTests(unittest.TestCase):
             },
         )
 
+    def test_build_incremental_query_rejects_non_positive_limit(self):
+        with self.assertRaisesRegex(ValueError, "limit"):
+            build_incremental_query(self.make_config(), cursor_value="100", limit=0)
+
     def test_build_incremental_query_uses_cursor_and_limit(self):
         query, params = build_incremental_query(self.make_config(), cursor_value="100", limit=500)
 
