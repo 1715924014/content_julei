@@ -92,7 +92,7 @@ python -m src.suggestion_pipeline export-db-results --db data/analysis.db --outp
 
 1. 先查看 Windows 任务计划程序的最近运行结果，确认是否为非 0 退出码。
 2. 打开最新的 `logs/daily-mysql-*.json`，查看 `status` 和 `error`。
-   日志也会记录 `duration_seconds`、`cursor_start`、`cursor_end`、`rows_read`、`rows_failed` 和 `error_summary`，用于判断任务耗时、增量游标推进和失败原因。
+   The log also records `duration_seconds`, `cursor_start`, `cursor_end`, `rows_read`, `rows_failed`, `limit_reached`, and `error_summary` for runtime, cursor progress, backlog detection, and failure triage.
 3. 如果任务在导入前失败，先查看 `doctor` 输出，确认配置、字段映射、密码环境变量和分析库可用。
 4. 如果错误与密码有关，确认运行账号下存在 `MINI_PROGRAM_DB_PASSWORD`。
 5. 如果错误与 MySQL 字段有关，核对生产配置中的 `field_mapping` 和 `cursor_field`。

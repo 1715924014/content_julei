@@ -163,12 +163,41 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["cursor_start"], "100")
         self.assertEqual(payload["cursor_end"], "125")
         self.assertEqual(payload["error_summary"], "")
+        self.assertFalse(payload["limit_reached"])
         import_batch.assert_called_once_with(
             config_path=Path("config/mysql.json"),
             db_path=Path("data/analysis.db"),
             cursor_override=None,
             limit=1000,
         )
+
+    def test_daily_mysql_job_marks_limit_reached_when_batch_reads_full_limit(self):
+        batch = Mock(
+            batch_id=11,
+            rows_read=1000,
+            rows_created=1000,
+            rows_skipped=0,
+            rows_failed=0,
+            cursor_start="100",
+            cursor_end="1100",
+            error_summary="",
+        )
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.import_mysql_batch",
+            return_value=batch,
+        ):
+            exit_code = run_daily_mysql_job(
+                config_path=Path("config/mysql.json"),
+                db_path=Path("data/analysis.db"),
+                log_dir=Path(directory),
+                limit=1000,
+                cursor_override=None,
+            )
+            logs = list(Path(directory).glob("daily-mysql-*.json"))
+            payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(payload["limit_reached"])
 
     def test_daily_mysql_job_returns_error_code_for_partial_batch(self):
         batch = Mock(

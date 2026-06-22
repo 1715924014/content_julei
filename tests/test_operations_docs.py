@@ -15,6 +15,7 @@ class OperationsDocsTests(unittest.TestCase):
             "--cursor",
             "logs",
             "rows_failed",
+            "limit_reached",
             "latest_successful_cursor",
             "analysis.db-wal",
             "analysis.db-shm",
