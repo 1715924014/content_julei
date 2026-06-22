@@ -122,10 +122,12 @@ def run_daily_mysql_job(
                 )
                 has_failed_rows = batch.rows_failed > 0
                 limit_reached = limit is not None and batch.rows_read >= limit
+                warnings = ["limit_reached"] if limit_reached else []
                 payload.update(
                     {
                         "status": "partial" if has_failed_rows else "success",
                         "limit_reached": limit_reached,
+                        "warnings": warnings,
                         "batch_id": batch.batch_id,
                         "rows_read": batch.rows_read,
                         "rows_created": batch.rows_created,

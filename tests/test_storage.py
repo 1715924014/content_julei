@@ -54,6 +54,16 @@ class StorageTests(unittest.TestCase):
 
         self.assertTrue(expected_indexes.issubset(actual_indexes))
 
+    def test_deferred_commits_roll_back_uncommitted_writes_on_error(self):
+        storage = self.make_storage()
+
+        with self.assertRaises(RuntimeError):
+            with storage.defer_commits():
+                storage.start_import_batch("mysql", cursor_start="100")
+                raise RuntimeError("stop batch")
+
+        self.assertEqual(storage.count_table("import_batches"), 0)
+
     def test_record_import_failure_persists_row_context(self):
         storage = self.make_storage()
         batch_id = storage.start_import_batch("mysql", cursor_start="100")

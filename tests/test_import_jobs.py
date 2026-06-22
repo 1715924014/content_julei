@@ -198,6 +198,7 @@ class ImportJobTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertTrue(payload["limit_reached"])
+        self.assertIn("limit_reached", payload["warnings"])
 
     def test_daily_mysql_job_returns_error_code_for_partial_batch(self):
         batch = Mock(
