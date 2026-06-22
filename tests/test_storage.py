@@ -219,6 +219,15 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(summary["health"]["status"], "attention")
         self.assertIn("latest_batch_has_failed_rows", summary["health"]["reasons"])
 
+    def test_import_status_summary_warns_when_latest_batch_is_running(self):
+        storage = self.make_storage()
+        storage.start_import_batch("mysql", cursor_start="100")
+
+        summary = storage.get_import_status_summary("mysql")
+
+        self.assertEqual(summary["health"]["status"], "warning")
+        self.assertIn("latest_batch_still_running", summary["health"]["reasons"])
+
     def test_import_status_summary_warns_when_review_tasks_are_pending(self):
         storage = self.make_storage()
         batch_id = storage.start_import_batch("mysql", cursor_start="0")

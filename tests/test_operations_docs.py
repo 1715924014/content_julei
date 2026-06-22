@@ -17,6 +17,7 @@ class OperationsDocsTests(unittest.TestCase):
             "rows_failed",
             "limit_reached",
             "warnings",
+            "latest_batch_still_running",
             "latest_successful_cursor",
             "analysis.db-wal",
             "analysis.db-shm",

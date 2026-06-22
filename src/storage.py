@@ -409,6 +409,9 @@ class Storage:
         if latest_batch is None:
             reasons.append("no_import_batches")
             status = "warning"
+        elif latest_batch.get("status") == "running":
+            reasons.append("latest_batch_still_running")
+            status = "warning"
         elif latest_batch.get("status") in {"partial", "failed"} or int(latest_batch.get("rows_failed") or 0) > 0:
             reasons.append("latest_batch_has_failed_rows")
             status = "attention"
