@@ -54,7 +54,7 @@ class ImportJobTests(unittest.TestCase):
             return_value=batch,
         ) as import_batch:
             lock_path = Path(directory) / "daily-mysql.lock"
-            lock_path.write_text("existing job", encoding="utf-8")
+            lock_path.write_text("2999-01-01T01:02:03+00:00", encoding="utf-8")
 
             exit_code = run_daily_mysql_job(
                 config_path=Path("config/mysql.json"),
@@ -72,6 +72,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["status"], "failed")
         self.assertEqual(payload["error"], "another daily MySQL job is already running")
         self.assertEqual(payload["lock_path"], str(lock_path))
+        self.assertEqual(payload["lock_started_at"], "2999-01-01T01:02:03+00:00")
         self.assertTrue(lock_exists_after_run)
         import_batch.assert_not_called()
 

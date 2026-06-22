@@ -17,6 +17,7 @@ class OperationsDocsTests(unittest.TestCase):
             "rows_failed",
             "error_type",
             "lock_path",
+            "lock_started_at",
             "limit_reached",
             "warnings",
             "latest_batch_still_running",

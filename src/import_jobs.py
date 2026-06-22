@@ -101,6 +101,10 @@ def run_daily_mysql_job(
                         pass
                     stale_lock_replaced = True
                     continue
+                try:
+                    payload["lock_started_at"] = lock_path.read_text(encoding="utf-8").strip()
+                except OSError:
+                    pass
                 payload.update(
                     {
                         "status": "failed",
