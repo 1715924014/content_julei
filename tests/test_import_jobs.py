@@ -5,11 +5,39 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from src.import_jobs import run_daily_mysql_job
+from src.import_jobs import import_mysql_batch, run_daily_mysql_job
 from src.storage import Storage, connect_analysis_db
 
 
 class ImportJobTests(unittest.TestCase):
+    def test_import_mysql_batch_rejects_non_positive_limit_before_connecting(self):
+        with patch("src.import_jobs.load_app_config") as load_config, patch("src.import_jobs.connect_mysql") as connect_mysql:
+            with self.assertRaisesRegex(ValueError, "limit"):
+                import_mysql_batch(
+                    config_path=Path("config/mysql.json"),
+                    db_path=Path("data/analysis.db"),
+                    limit=0,
+                )
+
+        load_config.assert_not_called()
+        connect_mysql.assert_not_called()
+
+    def test_daily_mysql_job_writes_failure_log_for_non_positive_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            exit_code = run_daily_mysql_job(
+                config_path=Path("config/mysql.json"),
+                db_path=Path("data/analysis.db"),
+                log_dir=Path(directory),
+                limit=0,
+                cursor_override=None,
+            )
+            logs = list(Path(directory).glob("daily-mysql-*.json"))
+            payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(payload["status"], "failed")
+        self.assertIn("limit", payload["error_summary"])
+
     def test_daily_mysql_job_refuses_to_run_when_lock_exists(self):
         batch = Mock(
             batch_id=9,

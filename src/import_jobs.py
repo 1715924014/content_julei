@@ -23,6 +23,8 @@ def import_mysql_batch(
     cursor_override: str | None = None,
     limit: int | None = None,
 ) -> BatchResult:
+    if limit is not None and limit <= 0:
+        raise ValueError("limit must be a positive integer")
     config = load_app_config(config_path)
     with closing(connect_analysis_db(db_path)) as connection:
         storage = Storage(connection)
