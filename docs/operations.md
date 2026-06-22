@@ -33,6 +33,8 @@ Configuration loading also rejects missing required MySQL mappings such as `sugg
 
 The MySQL connector fails before opening a network connection when the configured password environment variable is missing or empty.
 
+The MySQL connector uses explicit network timeouts: 10 seconds connect timeout and 60 seconds for read/write operations.
+
 预检返回 `success` 才进入任务计划配置；如果返回 `failed`，先按 `issues` 修复。`field_mapping_complete` 为 `false` 时，通常表示小程序 MySQL 字段映射缺少 `suggestion_id`、`raw_text` 等必要字段。
 
 ## 每日运行

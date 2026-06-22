@@ -1,5 +1,7 @@
+import sys
+import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from src.config import MySQLSourceConfig
 from src.mysql_source import build_incremental_query, connect_mysql, map_mysql_row
@@ -30,6 +32,21 @@ class MySQLSourceTests(unittest.TestCase):
                 "closed_date": "closed_at",
             },
         )
+
+    def test_connect_mysql_sets_network_timeouts(self):
+        fake_pymysql = types.SimpleNamespace(
+            connect=Mock(),
+            cursors=types.SimpleNamespace(DictCursor=object()),
+        )
+        with patch.dict("os.environ", {"MINI_PROGRAM_DB_PASSWORD": "secret"}, clear=True), patch.dict(
+            sys.modules, {"pymysql": fake_pymysql}
+        ):
+            connect_mysql(self.make_config())
+
+        kwargs = fake_pymysql.connect.call_args.kwargs
+        self.assertEqual(kwargs["connect_timeout"], 10)
+        self.assertEqual(kwargs["read_timeout"], 60)
+        self.assertEqual(kwargs["write_timeout"], 60)
 
     def test_connect_mysql_rejects_missing_password_environment_variable(self):
         with patch.dict("os.environ", {}, clear=True):

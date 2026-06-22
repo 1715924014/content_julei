@@ -21,6 +21,7 @@ class OperationsDocsTests(unittest.TestCase):
             "unsafe SQL identifier",
             "positive integer",
             "password environment variable",
+            "connect timeout",
             "latest_successful_cursor",
             "analysis.db-wal",
             "analysis.db-shm",
