@@ -159,6 +159,7 @@ def run_daily_mysql_job(
                         "status": "failed",
                         "error": str(exc),
                         "error_summary": str(exc),
+                        "error_type": type(exc).__name__,
                     }
                 )
                 exit_code = 1

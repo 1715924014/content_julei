@@ -15,6 +15,7 @@ class OperationsDocsTests(unittest.TestCase):
             "--cursor",
             "logs",
             "rows_failed",
+            "error_type",
             "limit_reached",
             "warnings",
             "latest_batch_still_running",

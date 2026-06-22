@@ -280,6 +280,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["status"], "failed")
         self.assertEqual(payload["error"], "database unavailable")
         self.assertEqual(payload["error_summary"], "database unavailable")
+        self.assertEqual(payload["error_type"], "RuntimeError")
         self.assertEqual(payload["cursor_override"], "100")
         self.assertIn("duration_seconds", payload)
         self.assertGreaterEqual(payload["duration_seconds"], 0)
