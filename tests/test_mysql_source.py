@@ -1,7 +1,8 @@
 import unittest
+from unittest.mock import patch
 
 from src.config import MySQLSourceConfig
-from src.mysql_source import build_incremental_query, map_mysql_row
+from src.mysql_source import build_incremental_query, connect_mysql, map_mysql_row
 
 
 class MySQLSourceTests(unittest.TestCase):
@@ -29,6 +30,11 @@ class MySQLSourceTests(unittest.TestCase):
                 "closed_date": "closed_at",
             },
         )
+
+    def test_connect_mysql_rejects_missing_password_environment_variable(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "MINI_PROGRAM_DB_PASSWORD"):
+                connect_mysql(self.make_config())
 
     def test_build_incremental_query_rejects_non_positive_limit(self):
         with self.assertRaisesRegex(ValueError, "limit"):

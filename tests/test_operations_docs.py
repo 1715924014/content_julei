@@ -20,6 +20,7 @@ class OperationsDocsTests(unittest.TestCase):
             "latest_batch_still_running",
             "unsafe SQL identifier",
             "positive integer",
+            "password environment variable",
             "latest_successful_cursor",
             "analysis.db-wal",
             "analysis.db-shm",

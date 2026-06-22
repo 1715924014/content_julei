@@ -47,6 +47,9 @@ def map_mysql_row(row: dict[str, Any], config: MySQLSourceConfig) -> dict[str, s
 
 
 def connect_mysql(config: MySQLSourceConfig):
+    password = os.environ.get(config.password_env, "")
+    if not password:
+        raise RuntimeError(f"MySQL password environment variable is not set: {config.password_env}")
     try:
         import pymysql
     except ImportError as exc:
@@ -55,7 +58,6 @@ def connect_mysql(config: MySQLSourceConfig):
             "Install it in the runtime environment before using import-mysql."
         ) from exc
 
-    password = os.environ.get(config.password_env, "")
     return pymysql.connect(
         host=config.host,
         port=config.port,

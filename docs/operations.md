@@ -31,6 +31,8 @@ Passing `--backup-root` makes `doctor` verify that the backup directory can be c
 
 Configuration loading also rejects missing required MySQL mappings such as `suggestion_id` and `raw_text`, plus any unsafe SQL identifier in the table, cursor field, or mapped source columns.
 
+The MySQL connector fails before opening a network connection when the configured password environment variable is missing or empty.
+
 预检返回 `success` 才进入任务计划配置；如果返回 `failed`，先按 `issues` 修复。`field_mapping_complete` 为 `false` 时，通常表示小程序 MySQL 字段映射缺少 `suggestion_id`、`raw_text` 等必要字段。
 
 ## 每日运行
