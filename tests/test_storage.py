@@ -35,6 +35,7 @@ class StorageTests(unittest.TestCase):
             "idx_import_batches_source_status_batch",
             "idx_source_suggestions_created",
             "idx_suggestion_analysis_batch",
+            "idx_suggestion_analysis_content_hash",
             "idx_issue_clusters_status_category_owner",
             "idx_cluster_members_source_status",
             "idx_cluster_members_cluster_status",

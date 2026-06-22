@@ -199,6 +199,8 @@ class Storage:
                 ON import_failures(batch_id, row_number);
             CREATE INDEX IF NOT EXISTS idx_suggestion_analysis_batch
                 ON suggestion_analysis(batch_id, source_suggestion_id);
+            CREATE INDEX IF NOT EXISTS idx_suggestion_analysis_content_hash
+                ON suggestion_analysis(content_hash, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_issue_clusters_status_category_owner
                 ON issue_clusters(status, primary_category, secondary_category, owner_department);
             CREATE INDEX IF NOT EXISTS idx_cluster_members_source_status
