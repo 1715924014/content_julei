@@ -147,6 +147,8 @@ The backup script also copies SQLite WAL sidecar files (`analysis.db-wal` and `a
 
 恢复时先停止每日任务，再把备份目录里的 `analysis.db` 复制回 `data/analysis.db`，随后运行：
 
+During restore, copy `analysis.db-wal` and `analysis.db-shm` back next to `analysis.db` when those files exist in the backup directory.
+
 ```powershell
 python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 ```

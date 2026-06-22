@@ -16,6 +16,9 @@ class OperationsDocsTests(unittest.TestCase):
             "logs",
             "rows_failed",
             "latest_successful_cursor",
+            "analysis.db-wal",
+            "analysis.db-shm",
+            "During restore",
             "Windows 任务计划程序",
         ]
         for term in required_terms:
