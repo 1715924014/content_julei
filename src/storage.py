@@ -589,16 +589,34 @@ class Storage:
             return None
         return [float(value) for value in values]
 
-    def list_active_cluster_vectors(self) -> list[ClusterVector]:
+    def list_active_cluster_vectors(
+        self,
+        *,
+        primary_category: str | None = None,
+        secondary_category: str | None = None,
+        owner_department: str | None = None,
+    ) -> list[ClusterVector]:
+        clauses = ["status = ?"]
+        params: list[object] = ["active"]
+        if primary_category is not None:
+            clauses.append("primary_category = ?")
+            params.append(primary_category)
+        if secondary_category is not None:
+            clauses.append("secondary_category = ?")
+            params.append(secondary_category)
+        if owner_department is not None:
+            clauses.append("owner_department = ?")
+            params.append(owner_department)
+        where_sql = " AND ".join(clauses)
         rows = self.connection.execute(
-            """
+            f"""
             SELECT cluster_id, cluster_summary, centroid_embedding_ref,
                 primary_category, secondary_category, owner_department, status
             FROM issue_clusters
-            WHERE status = ?
+            WHERE {where_sql}
             ORDER BY cluster_id
             """,
-            ("active",),
+            params,
         ).fetchall()
         clusters: list[ClusterVector] = []
         for row in rows:

@@ -70,7 +70,13 @@ def persist_cluster_decision(
     category_confidence: float,
     embedding: list[float],
 ) -> None:
-    index = InMemoryVectorIndex(storage.list_active_cluster_vectors())
+    index = InMemoryVectorIndex(
+        storage.list_active_cluster_vectors(
+            primary_category=primary_category,
+            secondary_category=secondary_category,
+            owner_department=owner_department,
+        )
+    )
     candidates = index.search(
         embedding,
         primary_category=primary_category,

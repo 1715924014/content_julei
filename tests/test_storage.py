@@ -480,6 +480,35 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(refreshed["first_seen_at"], first["first_seen_at"])
         self.assertGreaterEqual(refreshed["last_seen_at"], first["last_seen_at"])
 
+    def test_list_active_cluster_vectors_filters_by_category_and_owner(self):
+        storage = self.make_storage()
+        matching = storage.create_issue_cluster(
+            source_suggestion_id="S001",
+            normalized_text="night canteen meals are cold",
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+            scenario_key="Canteen",
+            centroid_embedding=[0.1, 0.2],
+        )
+        storage.create_issue_cluster(
+            source_suggestion_id="S002",
+            normalized_text="workshop masks are insufficient",
+            primary_category="Safety",
+            secondary_category="Labor protection",
+            owner_department="Safety",
+            scenario_key="Safety",
+            centroid_embedding=[0.3, 0.4],
+        )
+
+        clusters = storage.list_active_cluster_vectors(
+            primary_category="Logistics",
+            secondary_category="Canteen",
+            owner_department="Facilities",
+        )
+
+        self.assertEqual([cluster.cluster_id for cluster in clusters], [matching])
+
     def test_apply_review_task_result_approves_pending_cluster_member_and_updates_count(self):
         storage = self.make_storage()
         storage.upsert_source_suggestion(
