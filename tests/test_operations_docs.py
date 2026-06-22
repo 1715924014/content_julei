@@ -18,6 +18,7 @@ class OperationsDocsTests(unittest.TestCase):
             "limit_reached",
             "warnings",
             "latest_batch_still_running",
+            "unsafe SQL identifier",
             "latest_successful_cursor",
             "analysis.db-wal",
             "analysis.db-shm",

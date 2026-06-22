@@ -7,6 +7,51 @@ from src.config import load_app_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_load_app_config_rejects_missing_required_mysql_field_mapping(self):
+        payload = {
+            "mysql_source": {
+                "host": "127.0.0.1",
+                "port": 3306,
+                "database": "mini_program",
+                "user": "report_user",
+                "password_env": "MINI_PROGRAM_DB_PASSWORD",
+                "table": "employee_suggestions",
+                "cursor_field": "id",
+                "field_mapping": {
+                    "suggestion_id": "id"
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "raw_text"):
+                load_app_config(path)
+
+    def test_load_app_config_rejects_unsafe_mysql_identifiers(self):
+        payload = {
+            "mysql_source": {
+                "host": "127.0.0.1",
+                "port": 3306,
+                "database": "mini_program",
+                "user": "report_user",
+                "password_env": "MINI_PROGRAM_DB_PASSWORD",
+                "table": "employee_suggestions",
+                "cursor_field": "id;drop",
+                "field_mapping": {
+                    "suggestion_id": "id",
+                    "raw_text": "content"
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "cursor_field"):
+                load_app_config(path)
+
     def test_loads_mysql_source_config_with_field_mapping(self):
         payload = {
             "mysql_source": {
