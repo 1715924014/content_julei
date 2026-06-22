@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any
 
@@ -49,6 +50,31 @@ class Storage:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection
         self.connection.row_factory = sqlite3.Row
+        self._deferred_commit_depth = 0
+        self._deferred_commit_pending = False
+
+    def _commit(self) -> None:
+        if self._deferred_commit_depth > 0:
+            self._deferred_commit_pending = True
+            return
+        self.connection.commit()
+
+    @contextmanager
+    def defer_commits(self):
+        self._deferred_commit_depth += 1
+        try:
+            yield
+        except Exception:
+            self._deferred_commit_depth -= 1
+            if self._deferred_commit_depth == 0:
+                self._deferred_commit_pending = False
+                self.connection.rollback()
+            raise
+        else:
+            self._deferred_commit_depth -= 1
+            if self._deferred_commit_depth == 0 and self._deferred_commit_pending:
+                self.connection.commit()
+                self._deferred_commit_pending = False
 
     def initialize_schema(self) -> None:
         self.connection.executescript(
@@ -212,7 +238,7 @@ class Storage:
             """
         )
         self._ensure_source_suggestions_owner_department()
-        self.connection.commit()
+        self._commit()
 
     def _ensure_source_suggestions_owner_department(self) -> None:
         columns = {
@@ -233,7 +259,7 @@ class Storage:
             """,
             (source_name, status, cursor_start, now, now, now),
         )
-        self.connection.commit()
+        self._commit()
         return int(cursor.lastrowid)
 
     def finish_import_batch(
@@ -270,7 +296,7 @@ class Storage:
                 batch_id,
             ),
         )
-        self.connection.commit()
+        self._commit()
 
     def record_import_failure(
         self,
@@ -301,7 +327,7 @@ class Storage:
                 now,
             ),
         )
-        self.connection.commit()
+        self._commit()
 
     def list_import_failures(self, batch_id: int) -> list[dict[str, Any]]:
         rows = self.connection.execute(
@@ -470,7 +496,7 @@ class Storage:
                     source_suggestion_id,
                 ),
             )
-        self.connection.commit()
+        self._commit()
         return True
 
     def clear_cluster_members_for_source(self, source_suggestion_id: str) -> None:
@@ -504,7 +530,7 @@ class Storage:
                 """,
                 (row["cluster_id"], now, row["cluster_id"]),
             )
-        self.connection.commit()
+        self._commit()
 
     def clear_review_tasks_for_source(self, source_suggestion_id: str) -> None:
         self.connection.execute(
@@ -514,7 +540,7 @@ class Storage:
             """,
             (source_suggestion_id, "pending"),
         )
-        self.connection.commit()
+        self._commit()
 
     def upsert_suggestion_analysis(self, row: dict[str, Any]) -> None:
         now = utc_now()
@@ -565,7 +591,7 @@ class Storage:
                 now,
             ),
         )
-        self.connection.commit()
+        self._commit()
 
     def get_cached_embedding_by_content_hash(self, content_hash_value: str) -> list[float] | None:
         row = self.connection.execute(
@@ -702,7 +728,7 @@ class Storage:
                 now,
             ),
         )
-        self.connection.commit()
+        self._commit()
         return cluster_id
 
     def add_cluster_member(
@@ -765,7 +791,7 @@ class Storage:
                 """,
                 (now, now, cluster_id),
             )
-        self.connection.commit()
+        self._commit()
 
     def create_review_task(
         self,
@@ -800,7 +826,7 @@ class Storage:
                 now,
             ),
         )
-        self.connection.commit()
+        self._commit()
 
     def list_pending_review_tasks(self) -> list[dict[str, Any]]:
         rows = self.connection.execute(
@@ -1038,7 +1064,7 @@ class Storage:
                 now,
             ),
         )
-        self.connection.commit()
+        self._commit()
 
     def list_persisted_action_item_export_rows(self) -> list[dict[str, Any]]:
         rows = self.connection.execute(
@@ -1245,7 +1271,7 @@ class Storage:
             """,
             ("reviewed", normalized_result, reviewed_by, now, review_task_id),
         )
-        self.connection.commit()
+        self._commit()
         return {
             "review_task_id": review_task_id,
             "review_result": normalized_result,

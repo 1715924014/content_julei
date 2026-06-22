@@ -193,114 +193,115 @@ def run_rows_import_batch(
     cursor_field: str = "suggestion_id",
     embedding_provider: object | None = None,
 ) -> BatchResult:
-    batch_id = storage.start_import_batch(source_name, cursor_start=cursor_start)
-    if embedding_provider is None:
-        embedding_provider = HashEmbeddingProvider()
-    seen_hashes: set[str] = set()
-    rows_created = 0
-    rows_skipped = 0
-    rows_failed = 0
-    cursor_end = cursor_start
-    error_summary: str | None = None
+    with storage.defer_commits():
+        batch_id = storage.start_import_batch(source_name, cursor_start=cursor_start)
+        if embedding_provider is None:
+            embedding_provider = HashEmbeddingProvider()
+        seen_hashes: set[str] = set()
+        rows_created = 0
+        rows_skipped = 0
+        rows_failed = 0
+        cursor_end = cursor_start
+        error_summary: str | None = None
 
-    for row_number, row in enumerate(rows, start=1):
-        source_suggestion_id = str(row.get("suggestion_id", "")).strip()
-        row_cursor = str(row.get(cursor_field) or source_suggestion_id)
-        try:
-            source_row = source_row_from_csv(row)
-            source_suggestion_id = source_row["source_suggestion_id"]
+        for row_number, row in enumerate(rows, start=1):
+            source_suggestion_id = str(row.get("suggestion_id", "")).strip()
             row_cursor = str(row.get(cursor_field) or source_suggestion_id)
-            created = storage.upsert_source_suggestion(source_row, import_batch_id=batch_id)
-            if created:
-                rows_created += 1
-                storage.clear_cluster_members_for_source(source_suggestion_id)
-                storage.clear_review_tasks_for_source(source_suggestion_id)
-            else:
-                rows_skipped += 1
+            try:
+                source_row = source_row_from_csv(row)
+                source_suggestion_id = source_row["source_suggestion_id"]
+                row_cursor = str(row.get(cursor_field) or source_suggestion_id)
+                created = storage.upsert_source_suggestion(source_row, import_batch_id=batch_id)
+                if created:
+                    rows_created += 1
+                    storage.clear_cluster_members_for_source(source_suggestion_id)
+                    storage.clear_review_tasks_for_source(source_suggestion_id)
+                else:
+                    rows_skipped += 1
+                    cursor_end = row_cursor
+                    continue
+
+                suggestion = Suggestion({field: row.get(field, "").strip() for field in INPUT_FIELDS})
+                flags = validate_suggestion(suggestion, seen_hashes)
+                primary, secondary, owner, confidence = classify_suggestion(
+                    suggestion.raw_text,
+                    suggestion.fields.get("scenario", ""),
+                )
+                quality = detect_quality_type(suggestion.raw_text, flags)
+                urgency = detect_urgency(suggestion.raw_text, primary)
+                review_required = "是" if flags or confidence < 0.6 or quality in {"信息不足", "情绪表达"} else "否"
+
+                normalized_text = normalize_text(suggestion.raw_text)
+                row_content_hash = content_hash(suggestion.raw_text)
+                cached_embedding = storage.get_cached_embedding_by_content_hash(row_content_hash)
+                if cached_embedding is None:
+                    embedding = embedding_provider.embed(normalized_text)
+                    embedding_status = "embedded"
+                else:
+                    embedding = cached_embedding
+                    embedding_status = "cached"
+                analysis_row = {
+                    "source_suggestion_id": source_suggestion_id,
+                    "batch_id": batch_id,
+                    "normalized_text": normalized_text,
+                    "content_hash": row_content_hash,
+                    "primary_category": primary,
+                    "secondary_category": secondary,
+                    "owner_department": suggestion.fields.get("owner_department", "") or owner,
+                    "quality_type": quality,
+                    "urgency_level": urgency,
+                    "classification_confidence": confidence,
+                    "embedding_status": embedding_status,
+                    "embedding_model": embedding_provider.model_name,
+                    "embedding_ref": json.dumps(embedding),
+                    "review_required": review_required,
+                    "analysis_status": "classified",
+                }
+
+                storage.upsert_suggestion_analysis(analysis_row)
+                persist_cluster_decision(
+                    storage,
+                    source_suggestion_id=source_suggestion_id,
+                    normalized_text=normalized_text,
+                    scenario_key=suggestion.fields.get("scenario", ""),
+                    primary_category=primary,
+                    secondary_category=secondary,
+                    owner_department=analysis_row["owner_department"],
+                    category_confidence=confidence,
+                    embedding=embedding,
+                )
                 cursor_end = row_cursor
-                continue
+            except Exception as exc:
+                rows_failed += 1
+                error_summary = str(exc)
+                storage.record_import_failure(
+                    batch_id=batch_id,
+                    source_suggestion_id=source_suggestion_id,
+                    source_cursor=row_cursor,
+                    row_number=row_number,
+                    error_message=str(exc),
+                    raw_row=row,
+                )
 
-            suggestion = Suggestion({field: row.get(field, "").strip() for field in INPUT_FIELDS})
-            flags = validate_suggestion(suggestion, seen_hashes)
-            primary, secondary, owner, confidence = classify_suggestion(
-                suggestion.raw_text,
-                suggestion.fields.get("scenario", ""),
-            )
-            quality = detect_quality_type(suggestion.raw_text, flags)
-            urgency = detect_urgency(suggestion.raw_text, primary)
-            review_required = "是" if flags or confidence < 0.6 or quality in {"信息不足", "情绪表达"} else "否"
-
-            normalized_text = normalize_text(suggestion.raw_text)
-            row_content_hash = content_hash(suggestion.raw_text)
-            cached_embedding = storage.get_cached_embedding_by_content_hash(row_content_hash)
-            if cached_embedding is None:
-                embedding = embedding_provider.embed(normalized_text)
-                embedding_status = "embedded"
-            else:
-                embedding = cached_embedding
-                embedding_status = "cached"
-            analysis_row = {
-                "source_suggestion_id": source_suggestion_id,
-                "batch_id": batch_id,
-                "normalized_text": normalized_text,
-                "content_hash": row_content_hash,
-                "primary_category": primary,
-                "secondary_category": secondary,
-                "owner_department": suggestion.fields.get("owner_department", "") or owner,
-                "quality_type": quality,
-                "urgency_level": urgency,
-                "classification_confidence": confidence,
-                "embedding_status": embedding_status,
-                "embedding_model": embedding_provider.model_name,
-                "embedding_ref": json.dumps(embedding),
-                "review_required": review_required,
-                "analysis_status": "classified",
-            }
-
-            storage.upsert_suggestion_analysis(analysis_row)
-            persist_cluster_decision(
-                storage,
-                source_suggestion_id=source_suggestion_id,
-                normalized_text=normalized_text,
-                scenario_key=suggestion.fields.get("scenario", ""),
-                primary_category=primary,
-                secondary_category=secondary,
-                owner_department=analysis_row["owner_department"],
-                category_confidence=confidence,
-                embedding=embedding,
-            )
-            cursor_end = row_cursor
-        except Exception as exc:
-            rows_failed += 1
-            error_summary = str(exc)
-            storage.record_import_failure(
-                batch_id=batch_id,
-                source_suggestion_id=source_suggestion_id,
-                source_cursor=row_cursor,
-                row_number=row_number,
-                error_message=str(exc),
-                raw_row=row,
-            )
-
-    storage.finish_import_batch(
-        batch_id,
-        cursor_end,
-        rows_read=len(rows),
-        rows_created=rows_created,
-        rows_skipped=rows_skipped,
-        rows_failed=rows_failed,
-        error_summary=error_summary,
-    )
-    return BatchResult(
-        batch_id,
-        len(rows),
-        rows_created,
-        rows_skipped,
-        rows_failed,
-        cursor_start,
-        cursor_end,
-        error_summary or "",
-    )
+        storage.finish_import_batch(
+            batch_id,
+            cursor_end,
+            rows_read=len(rows),
+            rows_created=rows_created,
+            rows_skipped=rows_skipped,
+            rows_failed=rows_failed,
+            error_summary=error_summary,
+        )
+        return BatchResult(
+            batch_id,
+            len(rows),
+            rows_created,
+            rows_skipped,
+            rows_failed,
+            cursor_start,
+            cursor_end,
+            error_summary or "",
+        )
 
 
 def run_csv_import_batch(storage: Storage, input_path: Path) -> BatchResult:

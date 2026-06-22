@@ -23,6 +23,16 @@ class CountingEmbeddingProvider:
         return [1.0, 0.0]
 
 
+class CountingConnection(sqlite3.Connection):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.commit_count = 0
+
+    def commit(self):
+        self.commit_count += 1
+        return super().commit()
+
+
 class CsvImportBatchTests(unittest.TestCase):
     def make_storage(self):
         storage = Storage(sqlite3.connect(":memory:"))
@@ -52,6 +62,33 @@ class CsvImportBatchTests(unittest.TestCase):
                 csv_row.update(row)
                 writer.writerow(csv_row)
         return input_path
+
+    def test_run_rows_import_batch_defers_commits_until_batch_finishes(self):
+        connection = sqlite3.connect(":memory:", factory=CountingConnection)
+        storage = Storage(connection)
+        storage.initialize_schema()
+        connection.commit_count = 0
+
+        result = run_rows_import_batch(
+            storage,
+            [
+                {
+                    "suggestion_id": "S001",
+                    "submit_date": "2026-06-01",
+                    "raw_text": "Night shift canteen meals are cold and need reheating",
+                    "department": "Production",
+                    "job_group": "Line worker",
+                    "work_location": "Plant A",
+                    "scenario": "Canteen",
+                    "status": "new",
+                }
+            ],
+            source_name="mysql",
+            cursor_start="0",
+        )
+
+        self.assertEqual(result.rows_created, 1)
+        self.assertEqual(connection.commit_count, 1)
 
     def test_run_csv_import_batch_is_idempotent_for_existing_suggestion(self):
         storage = self.make_storage()
