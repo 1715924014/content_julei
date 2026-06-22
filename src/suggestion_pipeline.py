@@ -443,6 +443,13 @@ def import_review_results(db_path: Path, input_path: Path) -> dict[str, int]:
     return summary
 
 
+def positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="员工建议分类聚类与整改闭环工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -499,7 +506,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Last imported source cursor value. Defaults to the latest successful mysql batch cursor.",
     )
-    import_mysql_parser.add_argument("--limit", type=int, default=None, help="Maximum source rows to import")
+    import_mysql_parser.add_argument("--limit", type=positive_int, default=None, help="Maximum source rows to import")
 
     daily_mysql_parser = subparsers.add_parser("run-daily-mysql", help="Run daily MySQL import and write a job log")
     daily_mysql_parser.add_argument("--config", required=True, type=Path, help="JSON config path")
@@ -510,7 +517,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the latest successful mysql batch cursor for backfill or recovery.",
     )
-    daily_mysql_parser.add_argument("--limit", type=int, default=None, help="Maximum source rows to import")
+    daily_mysql_parser.add_argument("--limit", type=positive_int, default=None, help="Maximum source rows to import")
     return parser
 
 

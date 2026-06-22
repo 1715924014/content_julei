@@ -19,6 +19,7 @@ class OperationsDocsTests(unittest.TestCase):
             "warnings",
             "latest_batch_still_running",
             "unsafe SQL identifier",
+            "positive integer",
             "latest_successful_cursor",
             "analysis.db-wal",
             "analysis.db-shm",
