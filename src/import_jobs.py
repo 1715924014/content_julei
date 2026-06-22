@@ -85,6 +85,7 @@ def run_daily_mysql_job(
         "cursor_override": cursor_override,
     }
     lock_path = log_dir / "daily-mysql.lock"
+    payload["lock_path"] = str(lock_path)
     lock_acquired = False
     stale_lock_replaced = False
     try:

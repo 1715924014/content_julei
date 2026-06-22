@@ -71,6 +71,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(len(logs), 1)
         self.assertEqual(payload["status"], "failed")
         self.assertEqual(payload["error"], "another daily MySQL job is already running")
+        self.assertEqual(payload["lock_path"], str(lock_path))
         self.assertTrue(lock_exists_after_run)
         import_batch.assert_not_called()
 
