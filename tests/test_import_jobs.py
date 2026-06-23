@@ -170,6 +170,8 @@ class ImportJobTests(unittest.TestCase):
         self.assertFalse(payload["latest_batch_limit_reached"])
         self.assertTrue(payload["latest_batch_throughput_below_minimum"])
         self.assertTrue(payload["latest_batch_duration_exceeded"])
+        self.assertIn("optimize_import_throughput", payload["recommended_actions"])
+        self.assertIn("review_runtime_capacity", payload["recommended_actions"])
         self.assertEqual(payload["health"]["status"], "warning")
         self.assertIn("latest_batch_below_min_throughput", payload["health"]["reasons"])
         self.assertIn("latest_batch_exceeded_max_duration", payload["health"]["reasons"])

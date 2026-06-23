@@ -56,7 +56,7 @@ Daily job status and exit codes: `status=success` returns `0`; `status=partial` 
 
 `--limit` must be a positive integer. Use the default daily value as the normal batch cap, and increase it temporarily only when `limit_reached` shows backlog. Monitoring thresholds such as `--min-throughput-rows-per-second` must also be positive finite numbers.
 
-Daily job logs include the post-import `health`, `pending_review_tasks`, `latest_successful_cursor`, `latest_batch_limit_reached`, `latest_batch_duration_seconds`, and `latest_batch_rows_per_second` fields when the status summary can be read. If summary capture fails, the import result is preserved and `health_summary_error` plus `health_summary_error_type` are written for troubleshooting.
+Daily job logs include the post-import `health`, `recommended_actions`, `pending_review_tasks`, `latest_successful_cursor`, `latest_batch_limit_reached`, `latest_batch_duration_seconds`, and `latest_batch_rows_per_second` fields when the status summary can be read. If summary capture fails, the import result is preserved and `health_summary_error` plus `health_summary_error_type` are written for troubleshooting.
 
 A `daily-mysql.lock` file in the log directory prevents overlapping scheduled runs. If a new run sees this lock, it writes a failed job log and exits with code `1` without importing. Locks older than 6 hours are treated as stale and replaced automatically; the job log records `stale_lock_replaced=true`. Only remove a fresh lock manually after confirming no daily import process is still running.
 
@@ -80,6 +80,7 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 - `latest_batch.rows_failed`：失败行数，应优先排查。
 - `health.status`: `ok` means the latest import is clean; `warning` means follow-up is needed, such as pending review tasks; `attention` means failed import rows need immediate handling.
 - `health.reasons`: machine-readable reasons such as `latest_batch_has_failed_rows`, `latest_batch_still_running`, `latest_batch_reached_daily_limit`, `latest_batch_exceeded_max_duration`, `latest_batch_below_min_throughput`, and `pending_review_tasks`.
+- `recommended_actions`: machine-readable next steps derived from `health.reasons`, such as `export_import_failures_and_repair_rows`, `run_additional_import_or_increase_limit`, `review_runtime_capacity`, `optimize_import_throughput`, and `review_pending_cluster_tasks`.
 - `latest_batch_limit_reached`: true when `status --daily-limit N` shows the latest batch read at least `N` rows, which means the daily cap may be hiding backlog.
 - `latest_batch_duration_seconds`: latest finished batch runtime in seconds; use it to watch whether daily imports stay within the expected processing window.
 - `latest_batch_rows_per_second`: latest finished batch throughput, calculated from `rows_read / latest_batch_duration_seconds`.

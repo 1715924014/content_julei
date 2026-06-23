@@ -164,6 +164,7 @@ def run_daily_mysql_job(
                     payload.update(
                         {
                             "health": summary["health"],
+                            "recommended_actions": summary["recommended_actions"],
                             "pending_review_tasks": summary["pending_review_tasks"],
                             "latest_successful_cursor": summary["latest_successful_cursor"],
                             "latest_batch_limit_reached": summary["latest_batch_limit_reached"],

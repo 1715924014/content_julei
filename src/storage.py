@@ -407,6 +407,13 @@ class Storage:
             and latest_batch_rows_per_second < min_throughput_rows_per_second
         )
         pending_review_tasks = self.count_pending_review_tasks()
+        health = self.build_import_health(
+            latest_batch_dict,
+            pending_review_tasks,
+            latest_batch_limit_reached,
+            latest_batch_duration_exceeded,
+            latest_batch_throughput_below_minimum,
+        )
         return {
             "source_name": source_name,
             "latest_successful_cursor": self.get_latest_successful_cursor(source_name),
@@ -417,18 +424,25 @@ class Storage:
             "latest_batch_duration_exceeded": latest_batch_duration_exceeded,
             "latest_batch_throughput_below_minimum": latest_batch_throughput_below_minimum,
             "pending_review_tasks": pending_review_tasks,
-            "health": self.build_import_health(
-                latest_batch_dict,
-                pending_review_tasks,
-                latest_batch_limit_reached,
-                latest_batch_duration_exceeded,
-                latest_batch_throughput_below_minimum,
-            ),
+            "health": health,
+            "recommended_actions": self.build_import_recommended_actions(health["reasons"]),
             "table_counts": {
                 table_name: self.count_table(table_name)
                 for table_name in sorted(COUNTABLE_TABLES)
             },
         }
+
+    def build_import_recommended_actions(self, reasons: list[str]) -> list[str]:
+        action_by_reason = {
+            "no_import_batches": "run_initial_import",
+            "latest_batch_still_running": "inspect_running_import_or_lock",
+            "latest_batch_has_failed_rows": "export_import_failures_and_repair_rows",
+            "latest_batch_reached_daily_limit": "run_additional_import_or_increase_limit",
+            "latest_batch_exceeded_max_duration": "review_runtime_capacity",
+            "latest_batch_below_min_throughput": "optimize_import_throughput",
+            "pending_review_tasks": "review_pending_cluster_tasks",
+        }
+        return [action_by_reason[reason] for reason in reasons if reason in action_by_reason]
 
     def calculate_batch_duration_seconds(self, batch: dict[str, Any] | None) -> int | None:
         if batch is None or not batch.get("started_at") or not batch.get("finished_at"):

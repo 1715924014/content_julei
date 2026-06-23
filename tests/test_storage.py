@@ -301,6 +301,7 @@ class StorageTests(unittest.TestCase):
         self.assertTrue(summary["latest_batch_limit_reached"])
         self.assertEqual(summary["health"]["status"], "warning")
         self.assertIn("latest_batch_reached_daily_limit", summary["health"]["reasons"])
+        self.assertIn("run_additional_import_or_increase_limit", summary["recommended_actions"])
 
     def test_import_status_summary_warns_when_latest_batch_exceeds_duration_threshold(self):
         storage = self.make_storage()
