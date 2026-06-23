@@ -256,6 +256,7 @@ class ImportJobTests(unittest.TestCase):
             cursor_start="100",
             cursor_end="110",
             error_summary="",
+            source_pending_after_batch=5,
         )
         with tempfile.TemporaryDirectory() as directory, patch(
             "src.import_jobs.import_mysql_batch",
@@ -276,6 +277,8 @@ class ImportJobTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["status"], "success")
+        self.assertIn("source_backlog_remaining", payload["warnings"])
+        self.assertIn("run_additional_import_or_increase_limit", payload["recommended_actions"])
         self.assertEqual(payload["health_summary_error"], "summary db unavailable")
         self.assertEqual(payload["health_summary_error_type"], "RuntimeError")
 
