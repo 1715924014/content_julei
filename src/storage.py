@@ -366,7 +366,7 @@ class Storage:
             return ""
         return str(row["cursor_end"] or "")
 
-    def get_import_status_summary(self, source_name: str) -> dict[str, Any]:
+    def get_import_status_summary(self, source_name: str, daily_limit: int | None = None) -> dict[str, Any]:
         latest_batch = self.connection.execute(
             """
             SELECT batch_id, source_name, status, cursor_start, cursor_end,
@@ -380,13 +380,19 @@ class Storage:
             (source_name,),
         ).fetchone()
         latest_batch_dict = dict(latest_batch) if latest_batch is not None else None
+        latest_batch_limit_reached = (
+            daily_limit is not None
+            and latest_batch_dict is not None
+            and int(latest_batch_dict.get("rows_read") or 0) >= daily_limit
+        )
         pending_review_tasks = self.count_pending_review_tasks()
         return {
             "source_name": source_name,
             "latest_successful_cursor": self.get_latest_successful_cursor(source_name),
             "latest_batch": latest_batch_dict,
+            "latest_batch_limit_reached": latest_batch_limit_reached,
             "pending_review_tasks": pending_review_tasks,
-            "health": self.build_import_health(latest_batch_dict, pending_review_tasks),
+            "health": self.build_import_health(latest_batch_dict, pending_review_tasks, latest_batch_limit_reached),
             "table_counts": {
                 table_name: self.count_table(table_name)
                 for table_name in sorted(COUNTABLE_TABLES)
@@ -403,6 +409,7 @@ class Storage:
         self,
         latest_batch: dict[str, Any] | None,
         pending_review_tasks: int,
+        latest_batch_limit_reached: bool = False,
     ) -> dict[str, Any]:
         reasons: list[str] = []
         status = "ok"
@@ -415,6 +422,10 @@ class Storage:
         elif latest_batch.get("status") in {"partial", "failed"} or int(latest_batch.get("rows_failed") or 0) > 0:
             reasons.append("latest_batch_has_failed_rows")
             status = "attention"
+        if latest_batch_limit_reached:
+            reasons.append("latest_batch_reached_daily_limit")
+            if status == "ok":
+                status = "warning"
         if pending_review_tasks > 0:
             reasons.append("pending_review_tasks")
             if status == "ok":

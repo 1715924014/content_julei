@@ -284,6 +284,24 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(summary["pending_review_tasks"], 0)
         self.assertEqual(summary["health"], {"status": "ok", "reasons": []})
 
+    def test_import_status_summary_warns_when_latest_batch_reaches_daily_limit(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="0")
+        storage.finish_import_batch(
+            batch_id,
+            "10000",
+            rows_read=10000,
+            rows_created=10000,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+
+        summary = storage.get_import_status_summary("mysql", daily_limit=10000)
+
+        self.assertTrue(summary["latest_batch_limit_reached"])
+        self.assertEqual(summary["health"]["status"], "warning")
+        self.assertIn("latest_batch_reached_daily_limit", summary["health"]["reasons"])
+
     def test_source_suggestion_upsert_is_idempotent_for_same_classification_fields(self):
         storage = self.make_storage()
         row = {

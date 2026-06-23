@@ -235,6 +235,45 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(normal_payload["health"]["status"], "attention")
         self.assertEqual(failing_payload["health"]["status"], "attention")
 
+    def test_status_daily_limit_marks_full_latest_batch_unhealthy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            with closing(connect_analysis_db(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                batch_id = storage.start_import_batch("mysql", cursor_start="0")
+                storage.finish_import_batch(
+                    batch_id,
+                    "10000",
+                    rows_read=10000,
+                    rows_created=10000,
+                    rows_skipped=0,
+                    rows_failed=0,
+                )
+
+            from src.suggestion_pipeline import main
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "status",
+                        "--db",
+                        str(db_path),
+                        "--source",
+                        "mysql",
+                        "--daily-limit",
+                        "10000",
+                        "--fail-on-unhealthy",
+                    ]
+                )
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(payload["latest_batch_limit_reached"])
+        self.assertEqual(payload["health"]["status"], "warning")
+        self.assertIn("latest_batch_reached_daily_limit", payload["health"]["reasons"])
+
     def test_export_db_results_writes_persisted_reports(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "analysis.db"
