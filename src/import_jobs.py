@@ -158,6 +158,9 @@ def run_daily_mysql_job(
                 if source_pending_after_batch is not None and source_pending_after_batch > 0:
                     warnings.append("source_backlog_remaining")
                     recommended_actions.append("run_additional_import_or_increase_limit")
+                if source_pending_error_summary:
+                    warnings.append("source_pending_count_unavailable")
+                    recommended_actions.append("inspect_source_pending_count")
                 payload.update(
                     {
                         "status": "partial" if has_failed_rows else "success",

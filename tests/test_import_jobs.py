@@ -361,6 +361,38 @@ class ImportJobTests(unittest.TestCase):
         self.assertTrue(payload["limit_reached"])
         self.assertIn("limit_reached", payload["warnings"])
 
+    def test_daily_mysql_job_warns_when_source_pending_count_fails(self):
+        batch = Mock(
+            batch_id=13,
+            rows_read=10,
+            rows_created=10,
+            rows_skipped=0,
+            rows_failed=0,
+            cursor_start="100",
+            cursor_end="110",
+            error_summary="",
+            source_pending_after_batch=None,
+            source_pending_error_summary="count unavailable",
+        )
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.import_mysql_batch",
+            return_value=batch,
+        ):
+            exit_code = run_daily_mysql_job(
+                config_path=Path("config/mysql.json"),
+                db_path=Path("data/analysis.db"),
+                log_dir=Path(directory),
+                limit=1000,
+                cursor_override=None,
+            )
+            logs = list(Path(directory).glob("daily-mysql-*.json"))
+            payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["source_pending_error_summary"], "count unavailable")
+        self.assertIn("source_pending_count_unavailable", payload["warnings"])
+        self.assertIn("inspect_source_pending_count", payload["recommended_actions"])
+
     def test_daily_mysql_job_returns_error_code_for_partial_batch(self):
         batch = Mock(
             batch_id=8,

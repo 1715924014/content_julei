@@ -29,6 +29,8 @@ class OperationsDocsTests(unittest.TestCase):
             "latest_batch_rows_per_second",
             "source_pending_after_batch",
             "source_pending_error_summary",
+            "source_pending_count_unavailable",
+            "inspect_source_pending_count",
             "latest_batch_throughput_below_minimum",
             "latest_batch_below_min_throughput",
             "recommended_actions",
