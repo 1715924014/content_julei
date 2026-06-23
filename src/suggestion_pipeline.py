@@ -539,6 +539,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the latest successful mysql batch cursor for backfill or recovery.",
     )
     daily_mysql_parser.add_argument("--limit", type=positive_int, default=None, help="Maximum source rows to import")
+    daily_mysql_parser.add_argument(
+        "--min-throughput-rows-per-second",
+        type=positive_float,
+        default=None,
+        help="Minimum acceptable latest import throughput in rows per second",
+    )
     return parser
 
 
@@ -630,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             log_dir=args.log_dir,
             cursor_override=args.cursor,
             limit=args.limit,
+            min_throughput_rows_per_second=args.min_throughput_rows_per_second,
         )
     parser.error("未知命令")
     return 2

@@ -42,14 +42,14 @@ The MySQL connector uses explicit network timeouts: 10 seconds connect timeout a
 Windows 任务计划程序建议调用脚本入口：
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -ConfigPath config\mysql.prod.json -DbPath data\analysis.db -LogDir logs -BackupRoot backups -Limit 10000
+powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -ConfigPath config\mysql.prod.json -DbPath data\analysis.db -LogDir logs -BackupRoot backups -Limit 10000 -MinThroughputRowsPerSecond 2
 ```
 
 脚本内部会调用：
 
 ```powershell
 python -m src.suggestion_pipeline doctor --config config\mysql.prod.json --db data\analysis.db
-python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.json --db data\analysis.db --log-dir logs --limit 10000
+python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.json --db data\analysis.db --log-dir logs --limit 10000 --min-throughput-rows-per-second 2
 ```
 
 Daily job status and exit codes: `status=success` returns `0`; `status=partial` returns `1` when imported rows contain failures; `status=failed` returns `1` when the job aborts before completing. The JSON log is written under `logs/daily-mysql-*.json`.

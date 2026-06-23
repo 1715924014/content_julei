@@ -5,6 +5,7 @@ param(
     [string]$LogDir = "logs",
     [string]$BackupRoot = "backups",
     [int]$Limit = 10000,
+    [double]$MinThroughputRowsPerSecond = 0,
     [string]$PythonCommand = "python"
 )
 
@@ -24,10 +25,17 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-& $PythonCommand -m src.suggestion_pipeline run-daily-mysql `
-    --config $ConfigPath `
-    --db $DbPath `
-    --log-dir $LogDir `
-    --limit $Limit
+$DailyArgs = @(
+    "-m", "src.suggestion_pipeline", "run-daily-mysql",
+    "--config", $ConfigPath,
+    "--db", $DbPath,
+    "--log-dir", $LogDir,
+    "--limit", $Limit
+)
+if ($MinThroughputRowsPerSecond -gt 0) {
+    $DailyArgs += @("--min-throughput-rows-per-second", $MinThroughputRowsPerSecond)
+}
+
+& $PythonCommand @DailyArgs
 
 exit $LASTEXITCODE

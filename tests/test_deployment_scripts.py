@@ -15,6 +15,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("MINI_PROGRAM_DB_PASSWORD", content)
         self.assertIn("$BackupRoot", content)
         self.assertIn("--backup-root", content)
+        self.assertIn("$MinThroughputRowsPerSecond", content)
+        self.assertIn("--min-throughput-rows-per-second", content)
         self.assertLess(content.index("doctor"), content.index("run-daily-mysql"))
 
     def test_backup_script_copies_database_and_logs(self):
