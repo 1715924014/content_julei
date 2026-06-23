@@ -20,6 +20,7 @@ class OperationsDocsTests(unittest.TestCase):
             "lock_started_at",
             "stale_lock_started_at",
             "limit_reached",
+            "source_backlog_remaining",
             "warnings",
             "latest_batch_still_running",
             "latest_batch_reached_daily_limit",

@@ -154,6 +154,8 @@ def run_daily_mysql_job(
                 source_pending_error_summary = getattr(batch, "source_pending_error_summary", "")
                 if type(source_pending_error_summary) is not str:
                     source_pending_error_summary = ""
+                if source_pending_after_batch is not None and source_pending_after_batch > 0:
+                    warnings.append("source_backlog_remaining")
                 payload.update(
                     {
                         "status": "partial" if has_failed_rows else "success",
@@ -179,10 +181,13 @@ def run_daily_mysql_job(
                             max_duration_seconds=max_duration_seconds,
                             min_throughput_rows_per_second=min_throughput_rows_per_second,
                         )
+                    recommended_actions = list(summary["recommended_actions"])
+                    if "source_backlog_remaining" in warnings:
+                        recommended_actions.append("run_additional_import_or_increase_limit")
                     payload.update(
                         {
                             "health": summary["health"],
-                            "recommended_actions": summary["recommended_actions"],
+                            "recommended_actions": list(dict.fromkeys(recommended_actions)),
                             "pending_review_tasks": summary["pending_review_tasks"],
                             "latest_successful_cursor": summary["latest_successful_cursor"],
                             "latest_batch_limit_reached": summary["latest_batch_limit_reached"],

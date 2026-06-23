@@ -318,6 +318,8 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["cursor_start"], "100")
         self.assertEqual(payload["cursor_end"], "125")
         self.assertEqual(payload["source_pending_after_batch"], 7)
+        self.assertIn("source_backlog_remaining", payload["warnings"])
+        self.assertIn("run_additional_import_or_increase_limit", payload["recommended_actions"])
         self.assertEqual(payload["error_summary"], "")
         self.assertFalse(payload["limit_reached"])
         import_batch.assert_called_once_with(
