@@ -11,6 +11,7 @@ backups/
 output/
 output_run_check/
 .worktrees/
+.superpowers/
 .idea/
 *.db
 *.sqlite

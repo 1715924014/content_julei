@@ -17,6 +17,13 @@ class GitIgnoreTests(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 self.assertIn(pattern, content)
 
+    def test_local_tool_state_directories_are_ignored(self):
+        content = Path(".gitignore").read_text(encoding="utf-8")
+
+        for pattern in [".superpowers/"]:
+            with self.subTest(pattern=pattern):
+                self.assertIn(pattern, content)
+
     def test_local_ime_state_files_are_ignored(self):
         content = Path(".gitignore").read_text(encoding="utf-8")
 
