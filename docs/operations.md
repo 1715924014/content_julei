@@ -79,10 +79,12 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 - `latest_batch.rows_skipped`：源数据未变化而跳过的行数。
 - `latest_batch.rows_failed`：失败行数，应优先排查。
 - `health.status`: `ok` means the latest import is clean; `warning` means follow-up is needed, such as pending review tasks; `attention` means failed import rows need immediate handling.
-- `health.reasons`: machine-readable reasons such as `latest_batch_has_failed_rows`, `latest_batch_still_running`, `latest_batch_reached_daily_limit`, and `pending_review_tasks`.
+- `health.reasons`: machine-readable reasons such as `latest_batch_has_failed_rows`, `latest_batch_still_running`, `latest_batch_reached_daily_limit`, `latest_batch_exceeded_max_duration`, and `pending_review_tasks`.
 - `latest_batch_limit_reached`: true when `status --daily-limit N` shows the latest batch read at least `N` rows, which means the daily cap may be hiding backlog.
+- `latest_batch_duration_seconds`: latest finished batch runtime in seconds; use it to watch whether daily imports stay within the expected processing window.
+- `latest_batch_duration_exceeded`: true when `status --max-duration-seconds N` shows the latest batch took longer than `N` seconds.
 - `pending_review_tasks`: pending manual review count. Keep it low to prevent uncertain clusters from accumulating.
-- For monitoring scripts, run `status --daily-limit 10000 --fail-on-unhealthy`; it still prints JSON but returns exit code `1` when `health.status` is not `ok`.
+- For monitoring scripts, run `status --daily-limit 10000 --max-duration-seconds 3600 --fail-on-unhealthy`; it still prints JSON but returns exit code `1` when `health.status` is not `ok`.
 - `table_counts.source_suggestions`：本地已保存源建议总数。
 - `table_counts.issue_clusters`：当前问题簇总数。
 
@@ -101,7 +103,7 @@ python -m src.suggestion_pipeline export-db-results --db data/analysis.db --outp
 
 1. 先查看 Windows 任务计划程序的最近运行结果，确认是否为非 0 退出码。
 2. 打开最新的 `logs/daily-mysql-*.json`，查看 `status` 和 `error`。
-   The log also records `duration_seconds`, `cursor_start`, `cursor_end`, `rows_read`, `rows_failed`, `limit_reached`, `warnings`, `lock_path`, `lock_started_at`, `stale_lock_started_at`, `error_type`, and `error_summary` for runtime, cursor progress, backlog detection, lock troubleshooting, and failure triage.
+   The log also records `duration_seconds`, `cursor_start`, `cursor_end`, `rows_read`, `rows_failed`, `limit_reached`, `warnings`, `lock_path`, `lock_started_at`, `stale_lock_started_at`, `error_type`, and `error_summary` for runtime, cursor progress, backlog detection, lock troubleshooting, and failure triage. Use `status --max-duration-seconds` to alert when recent completed batches are slower than expected.
 3. 如果任务在导入前失败，先查看 `doctor` 输出，确认配置、字段映射、密码环境变量和分析库可用。
 4. 如果错误与密码有关，确认运行账号下存在 `MINI_PROGRAM_DB_PASSWORD`。
 5. 如果错误与 MySQL 字段有关，核对生产配置中的 `field_mapping` 和 `cursor_field`。

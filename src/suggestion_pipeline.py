@@ -473,6 +473,12 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--source", default="mysql", help="Import source name")
     status_parser.add_argument("--daily-limit", type=positive_int, default=None, help="Expected daily import row limit")
     status_parser.add_argument(
+        "--max-duration-seconds",
+        type=positive_int,
+        default=None,
+        help="Maximum acceptable latest import duration in seconds",
+    )
+    status_parser.add_argument(
         "--fail-on-unhealthy",
         action="store_true",
         help="Return exit code 1 when health.status is not ok",
@@ -547,7 +553,11 @@ def main(argv: list[str] | None = None) -> int:
         with closing(connect_analysis_db(args.db)) as connection:
             storage = Storage(connection)
             storage.initialize_schema()
-            summary = storage.get_import_status_summary(args.source, daily_limit=args.daily_limit)
+            summary = storage.get_import_status_summary(
+                args.source,
+                daily_limit=args.daily_limit,
+                max_duration_seconds=args.max_duration_seconds,
+            )
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         if args.fail_on_unhealthy and summary["health"]["status"] != "ok":
             return 1

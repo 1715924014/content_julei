@@ -366,7 +366,12 @@ class Storage:
             return ""
         return str(row["cursor_end"] or "")
 
-    def get_import_status_summary(self, source_name: str, daily_limit: int | None = None) -> dict[str, Any]:
+    def get_import_status_summary(
+        self,
+        source_name: str,
+        daily_limit: int | None = None,
+        max_duration_seconds: int | None = None,
+    ) -> dict[str, Any]:
         latest_batch = self.connection.execute(
             """
             SELECT batch_id, source_name, status, cursor_start, cursor_end,
@@ -385,19 +390,46 @@ class Storage:
             and latest_batch_dict is not None
             and int(latest_batch_dict.get("rows_read") or 0) >= daily_limit
         )
+        latest_batch_duration_seconds = self.calculate_batch_duration_seconds(latest_batch_dict)
+        latest_batch_duration_exceeded = (
+            max_duration_seconds is not None
+            and latest_batch_duration_seconds is not None
+            and latest_batch_duration_seconds > max_duration_seconds
+        )
         pending_review_tasks = self.count_pending_review_tasks()
         return {
             "source_name": source_name,
             "latest_successful_cursor": self.get_latest_successful_cursor(source_name),
             "latest_batch": latest_batch_dict,
             "latest_batch_limit_reached": latest_batch_limit_reached,
+            "latest_batch_duration_seconds": latest_batch_duration_seconds,
+            "latest_batch_duration_exceeded": latest_batch_duration_exceeded,
             "pending_review_tasks": pending_review_tasks,
-            "health": self.build_import_health(latest_batch_dict, pending_review_tasks, latest_batch_limit_reached),
+            "health": self.build_import_health(
+                latest_batch_dict,
+                pending_review_tasks,
+                latest_batch_limit_reached,
+                latest_batch_duration_exceeded,
+            ),
             "table_counts": {
                 table_name: self.count_table(table_name)
                 for table_name in sorted(COUNTABLE_TABLES)
             },
         }
+
+    def calculate_batch_duration_seconds(self, batch: dict[str, Any] | None) -> int | None:
+        if batch is None or not batch.get("started_at") or not batch.get("finished_at"):
+            return None
+        try:
+            started_at = datetime.fromisoformat(str(batch["started_at"]))
+            finished_at = datetime.fromisoformat(str(batch["finished_at"]))
+        except ValueError:
+            return None
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        if finished_at.tzinfo is None:
+            finished_at = finished_at.replace(tzinfo=timezone.utc)
+        return max(0, int((finished_at - started_at).total_seconds()))
 
     def count_pending_review_tasks(self) -> int:
         row = self.connection.execute(
@@ -410,6 +442,7 @@ class Storage:
         latest_batch: dict[str, Any] | None,
         pending_review_tasks: int,
         latest_batch_limit_reached: bool = False,
+        latest_batch_duration_exceeded: bool = False,
     ) -> dict[str, Any]:
         reasons: list[str] = []
         status = "ok"
@@ -424,6 +457,10 @@ class Storage:
             status = "attention"
         if latest_batch_limit_reached:
             reasons.append("latest_batch_reached_daily_limit")
+            if status == "ok":
+                status = "warning"
+        if latest_batch_duration_exceeded:
+            reasons.append("latest_batch_exceeded_max_duration")
             if status == "ok":
                 status = "warning"
         if pending_review_tasks > 0:
