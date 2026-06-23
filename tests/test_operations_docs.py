@@ -25,6 +25,7 @@ class OperationsDocsTests(unittest.TestCase):
             "latest_batch_reached_daily_limit",
             "latest_batch_limit_reached",
             "latest_batch_duration_seconds",
+            "latest_batch_rows_per_second",
             "latest_batch_duration_exceeded",
             "latest_batch_exceeded_max_duration",
             "--daily-limit",

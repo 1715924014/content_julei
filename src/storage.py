@@ -391,6 +391,10 @@ class Storage:
             and int(latest_batch_dict.get("rows_read") or 0) >= daily_limit
         )
         latest_batch_duration_seconds = self.calculate_batch_duration_seconds(latest_batch_dict)
+        latest_batch_rows_per_second = self.calculate_batch_rows_per_second(
+            latest_batch_dict,
+            latest_batch_duration_seconds,
+        )
         latest_batch_duration_exceeded = (
             max_duration_seconds is not None
             and latest_batch_duration_seconds is not None
@@ -403,6 +407,7 @@ class Storage:
             "latest_batch": latest_batch_dict,
             "latest_batch_limit_reached": latest_batch_limit_reached,
             "latest_batch_duration_seconds": latest_batch_duration_seconds,
+            "latest_batch_rows_per_second": latest_batch_rows_per_second,
             "latest_batch_duration_exceeded": latest_batch_duration_exceeded,
             "pending_review_tasks": pending_review_tasks,
             "health": self.build_import_health(
@@ -430,6 +435,15 @@ class Storage:
         if finished_at.tzinfo is None:
             finished_at = finished_at.replace(tzinfo=timezone.utc)
         return max(0, int((finished_at - started_at).total_seconds()))
+
+    def calculate_batch_rows_per_second(
+        self,
+        batch: dict[str, Any] | None,
+        duration_seconds: int | None,
+    ) -> float | None:
+        if batch is None or duration_seconds is None or duration_seconds <= 0:
+            return None
+        return round(int(batch.get("rows_read") or 0) / duration_seconds, 3)
 
     def count_pending_review_tasks(self) -> int:
         row = self.connection.execute(

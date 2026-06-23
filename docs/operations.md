@@ -82,6 +82,7 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 - `health.reasons`: machine-readable reasons such as `latest_batch_has_failed_rows`, `latest_batch_still_running`, `latest_batch_reached_daily_limit`, `latest_batch_exceeded_max_duration`, and `pending_review_tasks`.
 - `latest_batch_limit_reached`: true when `status --daily-limit N` shows the latest batch read at least `N` rows, which means the daily cap may be hiding backlog.
 - `latest_batch_duration_seconds`: latest finished batch runtime in seconds; use it to watch whether daily imports stay within the expected processing window.
+- `latest_batch_rows_per_second`: latest finished batch throughput, calculated from `rows_read / latest_batch_duration_seconds`.
 - `latest_batch_duration_exceeded`: true when `status --max-duration-seconds N` shows the latest batch took longer than `N` seconds.
 - `pending_review_tasks`: pending manual review count. Keep it low to prevent uncertain clusters from accumulating.
 - For monitoring scripts, run `status --daily-limit 10000 --max-duration-seconds 3600 --fail-on-unhealthy`; it still prints JSON but returns exit code `1` when `health.status` is not `ok`.

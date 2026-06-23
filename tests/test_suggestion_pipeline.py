@@ -323,6 +323,41 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(payload["health"]["status"], "warning")
         self.assertIn("latest_batch_exceeded_max_duration", payload["health"]["reasons"])
 
+    def test_status_outputs_latest_batch_throughput(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            with closing(connect_analysis_db(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                batch_id = storage.start_import_batch("mysql", cursor_start="0")
+                storage.finish_import_batch(
+                    batch_id,
+                    "300",
+                    rows_read=300,
+                    rows_created=300,
+                    rows_skipped=0,
+                    rows_failed=0,
+                )
+                connection.execute(
+                    """
+                    UPDATE import_batches
+                    SET started_at = ?, finished_at = ?
+                    WHERE batch_id = ?
+                    """,
+                    ("2026-06-23T00:00:00+00:00", "2026-06-23T00:05:00+00:00", batch_id),
+                )
+                connection.commit()
+
+            from src.suggestion_pipeline import main
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(["status", "--db", str(db_path), "--source", "mysql"])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["latest_batch_rows_per_second"], 1.0)
+
     def test_export_db_results_writes_persisted_reports(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "analysis.db"
