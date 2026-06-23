@@ -178,6 +178,27 @@ class SuggestionPipelineTests(unittest.TestCase):
 
         connect_db.assert_not_called()
 
+    def test_run_daily_mysql_rejects_non_finite_min_throughput(self):
+        with patch("src.suggestion_pipeline.run_daily_mysql_job") as run_job:
+            from src.suggestion_pipeline import main
+
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "run-daily-mysql",
+                        "--config",
+                        "config.json",
+                        "--db",
+                        "analysis.db",
+                        "--log-dir",
+                        "logs",
+                        "--min-throughput-rows-per-second",
+                        "nan",
+                    ]
+                )
+
+        run_job.assert_not_called()
+
     def test_run_daily_mysql_delegates_to_daily_job(self):
         with patch("src.suggestion_pipeline.run_daily_mysql_job", return_value=1) as run_job:
             from src.suggestion_pipeline import main
