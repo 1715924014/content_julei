@@ -52,7 +52,7 @@ python -m src.suggestion_pipeline doctor --config config\mysql.prod.json --db da
 python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.json --db data\analysis.db --log-dir logs --limit 10000 --max-duration-seconds 3600 --min-throughput-rows-per-second 2
 ```
 
-Daily job status and exit codes: `status=success` returns `0`; `status=partial` returns `1` when imported rows contain failures; `status=failed` returns `1` when the job aborts before completing. The JSON log is written under `logs/daily-mysql-*.json`.
+Daily job status and exit codes: `status=success` returns `0`; `status=partial` returns `1` when imported rows contain failures; `status=failed` returns `1` when the job aborts before completing. The JSON log is written under `logs/daily-mysql-*.json`. The scheduled script keeps daily logs for `LogRetentionDays` days by default, and `-LogRetentionDays 0` disables log cleanup.
 
 `--limit` must be a positive integer. Use the default daily value as the normal batch cap, and increase it temporarily only when `limit_reached` shows backlog. Monitoring thresholds such as `--min-throughput-rows-per-second` must also be positive finite numbers.
 

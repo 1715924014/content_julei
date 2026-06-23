@@ -19,6 +19,9 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("--max-duration-seconds", content)
         self.assertIn("$MinThroughputRowsPerSecond", content)
         self.assertIn("--min-throughput-rows-per-second", content)
+        self.assertIn("$LogRetentionDays", content)
+        self.assertIn("daily-mysql-*.json", content)
+        self.assertIn("Remove-Item", content)
         self.assertLess(content.index("doctor"), content.index("run-daily-mysql"))
 
     def test_backup_script_copies_database_and_logs(self):

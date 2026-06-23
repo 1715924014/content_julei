@@ -14,6 +14,8 @@ class OperationsDocsTests(unittest.TestCase):
             "MINI_PROGRAM_DB_PASSWORD",
             "--cursor",
             "logs",
+            "LogRetentionDays",
+            "daily-mysql-*.json",
             "rows_failed",
             "error_type",
             "lock_path",

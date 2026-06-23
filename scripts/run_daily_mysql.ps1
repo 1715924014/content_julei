@@ -4,6 +4,7 @@ param(
     [string]$DbPath = "data\analysis.db",
     [string]$LogDir = "logs",
     [string]$BackupRoot = "backups",
+    [int]$LogRetentionDays = 90,
     [int]$Limit = 10000,
     [int]$MaxDurationSeconds = 0,
     [double]$MinThroughputRowsPerSecond = 0,
@@ -41,5 +42,13 @@ if ($MinThroughputRowsPerSecond -gt 0) {
 }
 
 & $PythonCommand @DailyArgs
+$DailyExitCode = $LASTEXITCODE
 
-exit $LASTEXITCODE
+if ($LogRetentionDays -gt 0) {
+    $LogCutoff = (Get-Date).AddDays(-$LogRetentionDays)
+    Get-ChildItem -Path $LogDir -Filter "daily-mysql-*.json" -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -lt $LogCutoff } |
+        Remove-Item -Force
+}
+
+exit $DailyExitCode
