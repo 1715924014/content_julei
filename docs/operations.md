@@ -54,7 +54,7 @@ python -m src.suggestion_pipeline run-daily-mysql --config config\mysql.prod.jso
 
 Daily job status and exit codes: `status=success` returns `0`; `status=partial` returns `1` when imported rows contain failures; `status=failed` returns `1` when the job aborts before completing. The JSON log is written under `logs/daily-mysql-*.json`.
 
-`--limit` must be a positive integer. Use the default daily value as the normal batch cap, and increase it temporarily only when `limit_reached` shows backlog. Monitoring thresholds such as `--min-throughput-rows-per-second` must also be positive numbers.
+`--limit` must be a positive integer. Use the default daily value as the normal batch cap, and increase it temporarily only when `limit_reached` shows backlog. Monitoring thresholds such as `--min-throughput-rows-per-second` must also be positive finite numbers.
 
 Daily job logs include the post-import `health`, `pending_review_tasks`, `latest_successful_cursor`, `latest_batch_limit_reached`, `latest_batch_duration_seconds`, and `latest_batch_rows_per_second` fields when the status summary can be read. If summary capture fails, the import result is preserved and `health_summary_error` plus `health_summary_error_type` are written for troubleshooting.
 
