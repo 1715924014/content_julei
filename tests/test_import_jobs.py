@@ -108,6 +108,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["status"], "success")
         self.assertTrue(payload["stale_lock_replaced"])
+        self.assertEqual(payload["stale_lock_started_at"], "2000-01-01T00:00:00+00:00")
         self.assertFalse(lock_exists_after_run)
         import_batch.assert_called_once()
 

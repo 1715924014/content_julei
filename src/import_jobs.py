@@ -96,6 +96,10 @@ def run_daily_mysql_job(
             except FileExistsError:
                 if is_stale_daily_lock(lock_path, started_at):
                     try:
+                        payload["stale_lock_started_at"] = lock_path.read_text(encoding="utf-8").strip()
+                    except OSError:
+                        pass
+                    try:
                         lock_path.unlink()
                     except FileNotFoundError:
                         pass
