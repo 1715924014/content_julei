@@ -144,6 +144,23 @@ class SuggestionPipelineTests(unittest.TestCase):
 
         run_job.assert_not_called()
 
+    def test_status_rejects_non_positive_min_throughput(self):
+        with patch("src.suggestion_pipeline.connect_analysis_db") as connect_db:
+            from src.suggestion_pipeline import main
+
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "status",
+                        "--db",
+                        "analysis.db",
+                        "--min-throughput-rows-per-second",
+                        "0",
+                    ]
+                )
+
+        connect_db.assert_not_called()
+
     def test_run_daily_mysql_delegates_to_daily_job(self):
         with patch("src.suggestion_pipeline.run_daily_mysql_job", return_value=1) as run_job:
             from src.suggestion_pipeline import main

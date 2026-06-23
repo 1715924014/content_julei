@@ -450,6 +450,13 @@ def positive_int(value: str) -> int:
     return parsed
 
 
+def positive_float(value: str) -> float:
+    parsed = float(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive number")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="员工建议分类聚类与整改闭环工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -480,7 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument(
         "--min-throughput-rows-per-second",
-        type=float,
+        type=positive_float,
         default=None,
         help="Minimum acceptable latest import throughput in rows per second",
     )
