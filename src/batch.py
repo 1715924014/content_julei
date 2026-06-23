@@ -24,6 +24,8 @@ class BatchResult:
     cursor_start: str
     cursor_end: str
     error_summary: str
+    source_pending_after_batch: int | None = None
+    source_pending_error_summary: str = ""
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:

@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from src.config import MySQLSourceConfig
-from src.mysql_source import build_incremental_query, connect_mysql, map_mysql_row
+from src.mysql_source import build_incremental_count_query, build_incremental_query, connect_mysql, map_mysql_row
 
 
 class MySQLSourceTests(unittest.TestCase):
@@ -65,6 +65,12 @@ class MySQLSourceTests(unittest.TestCase):
         self.assertIn("ORDER BY `id` ASC", query)
         self.assertIn("LIMIT %s", query)
         self.assertEqual(params, ["100", 500])
+
+    def test_build_incremental_count_query_uses_cursor_without_limit(self):
+        query, params = build_incremental_count_query(self.make_config(), cursor_value="100")
+
+        self.assertEqual(query, "SELECT COUNT(*) AS pending_count FROM `employee_suggestions` WHERE `id` > %s")
+        self.assertEqual(params, ["100"])
 
     def test_map_mysql_row_outputs_pipeline_input_fields(self):
         mapped = map_mysql_row(

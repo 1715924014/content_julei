@@ -9,7 +9,7 @@ from pathlib import Path
 
 from src.batch import BatchResult, run_rows_import_batch
 from src.config import load_app_config
-from src.mysql_source import connect_mysql, fetch_incremental_rows
+from src.mysql_source import connect_mysql, fetch_incremental_count, fetch_incremental_rows
 from src.storage import Storage, connect_analysis_db, utc_now
 
 
@@ -39,13 +39,23 @@ def import_mysql_batch(
                 cursor_value=cursor_start,
                 limit=limit,
             )
-        return run_rows_import_batch(
-            storage,
-            rows,
-            source_name="mysql",
-            cursor_start=cursor_start or "0",
-            cursor_field="_source_cursor",
-        )
+            result = run_rows_import_batch(
+                storage,
+                rows,
+                source_name="mysql",
+                cursor_start=cursor_start or "0",
+                cursor_field="_source_cursor",
+            )
+            try:
+                result.source_pending_after_batch = fetch_incremental_count(
+                    source_connection,
+                    config.mysql_source,
+                    cursor_value=result.cursor_end,
+                )
+            except Exception as exc:
+                result.source_pending_after_batch = None
+                result.source_pending_error_summary = str(exc)
+            return result
 
 
 def is_stale_daily_lock(lock_path: Path, now_iso: str) -> bool:
@@ -138,6 +148,12 @@ def run_daily_mysql_job(
                 has_failed_rows = batch.rows_failed > 0
                 limit_reached = limit is not None and batch.rows_read >= limit
                 warnings = ["limit_reached"] if limit_reached else []
+                source_pending_after_batch = getattr(batch, "source_pending_after_batch", None)
+                if type(source_pending_after_batch) is not int:
+                    source_pending_after_batch = None
+                source_pending_error_summary = getattr(batch, "source_pending_error_summary", "")
+                if type(source_pending_error_summary) is not str:
+                    source_pending_error_summary = ""
                 payload.update(
                     {
                         "status": "partial" if has_failed_rows else "success",
@@ -150,6 +166,8 @@ def run_daily_mysql_job(
                         "rows_failed": batch.rows_failed,
                         "cursor_start": getattr(batch, "cursor_start", ""),
                         "cursor_end": getattr(batch, "cursor_end", ""),
+                        "source_pending_after_batch": source_pending_after_batch,
+                        "source_pending_error_summary": source_pending_error_summary,
                         "error_summary": getattr(batch, "error_summary", ""),
                     }
                 )

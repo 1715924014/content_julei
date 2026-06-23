@@ -35,6 +35,19 @@ def build_incremental_query(
     return query, params
 
 
+def build_incremental_count_query(
+    config: MySQLSourceConfig,
+    *,
+    cursor_value: str | None = None,
+) -> tuple[str, list[Any]]:
+    query = f"SELECT COUNT(*) AS pending_count FROM {quote_identifier(config.table)}"
+    params: list[Any] = []
+    if cursor_value not in (None, ""):
+        query += f" WHERE {quote_identifier(config.cursor_field)} > %s"
+        params.append(cursor_value)
+    return query, params
+
+
 def map_mysql_row(row: dict[str, Any], config: MySQLSourceConfig) -> dict[str, str]:
     mapped: dict[str, str] = {}
     for field in INPUT_FIELDS:
@@ -84,3 +97,20 @@ def fetch_incremental_rows(
         cursor.execute(query, params)
         rows = cursor.fetchall()
     return [map_mysql_row(dict(row), config) for row in rows]
+
+
+def fetch_incremental_count(
+    connection,
+    config: MySQLSourceConfig,
+    *,
+    cursor_value: str | None = None,
+) -> int:
+    query, params = build_incremental_count_query(config, cursor_value=cursor_value)
+    with connection.cursor() as cursor:
+        cursor.execute(query, params)
+        row = cursor.fetchone()
+    if row is None:
+        return 0
+    if isinstance(row, dict):
+        return int(row.get("pending_count") or 0)
+    return int(row[0] or 0)

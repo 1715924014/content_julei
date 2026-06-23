@@ -3,8 +3,9 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
+from src.batch import BatchResult
 from src.import_jobs import import_mysql_batch, run_daily_mysql_job
 from src.storage import Storage, connect_analysis_db
 
@@ -21,6 +22,74 @@ class ImportJobTests(unittest.TestCase):
 
         load_config.assert_not_called()
         connect_mysql.assert_not_called()
+
+    def test_import_mysql_batch_records_source_pending_after_batch(self):
+        source_connection = Mock()
+        mysql_context = MagicMock()
+        mysql_context.__enter__.return_value = source_connection
+        mysql_config = Mock()
+        app_config = Mock(mysql_source=mysql_config)
+        imported = BatchResult(1, 25, 20, 5, 0, "100", "125", "")
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.load_app_config",
+            return_value=app_config,
+        ), patch(
+            "src.import_jobs.connect_mysql",
+            return_value=mysql_context,
+        ), patch(
+            "src.import_jobs.fetch_incremental_rows",
+            return_value=[{"suggestion_id": "S001", "raw_text": "Need better meals", "_source_cursor": "125"}],
+        ) as fetch_rows, patch(
+            "src.import_jobs.run_rows_import_batch",
+            return_value=imported,
+        ), patch(
+            "src.import_jobs.fetch_incremental_count",
+            return_value=42,
+        ) as fetch_count:
+            result = import_mysql_batch(
+                config_path=Path("config/mysql.json"),
+                db_path=Path(directory) / "analysis.db",
+                cursor_override="100",
+                limit=25,
+            )
+
+        self.assertEqual(result.source_pending_after_batch, 42)
+        fetch_rows.assert_called_once_with(source_connection, mysql_config, cursor_value="100", limit=25)
+        fetch_count.assert_called_once_with(source_connection, mysql_config, cursor_value="125")
+
+    def test_import_mysql_batch_preserves_import_when_pending_count_fails(self):
+        source_connection = Mock()
+        mysql_context = MagicMock()
+        mysql_context.__enter__.return_value = source_connection
+        app_config = Mock(mysql_source=Mock())
+        imported = BatchResult(1, 25, 20, 5, 0, "100", "125", "")
+
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.load_app_config",
+            return_value=app_config,
+        ), patch(
+            "src.import_jobs.connect_mysql",
+            return_value=mysql_context,
+        ), patch(
+            "src.import_jobs.fetch_incremental_rows",
+            return_value=[{"suggestion_id": "S001", "raw_text": "Need better meals", "_source_cursor": "125"}],
+        ), patch(
+            "src.import_jobs.run_rows_import_batch",
+            return_value=imported,
+        ), patch(
+            "src.import_jobs.fetch_incremental_count",
+            side_effect=RuntimeError("count unavailable"),
+        ):
+            result = import_mysql_batch(
+                config_path=Path("config/mysql.json"),
+                db_path=Path(directory) / "analysis.db",
+                cursor_override="100",
+                limit=25,
+            )
+
+        self.assertIsNone(result.source_pending_after_batch)
+        self.assertEqual(result.source_pending_error_summary, "count unavailable")
 
     def test_daily_mysql_job_writes_failure_log_for_non_positive_limit(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -48,6 +117,7 @@ class ImportJobTests(unittest.TestCase):
             cursor_start="100",
             cursor_end="101",
             error_summary="",
+            source_pending_after_batch=7,
         )
         with tempfile.TemporaryDirectory() as directory, patch(
             "src.import_jobs.import_mysql_batch",
@@ -219,6 +289,7 @@ class ImportJobTests(unittest.TestCase):
             cursor_start="100",
             cursor_end="125",
             error_summary="",
+            source_pending_after_batch=7,
         )
         with tempfile.TemporaryDirectory() as directory, patch(
             "src.import_jobs.import_mysql_batch",
@@ -246,6 +317,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertGreaterEqual(payload["duration_seconds"], 0)
         self.assertEqual(payload["cursor_start"], "100")
         self.assertEqual(payload["cursor_end"], "125")
+        self.assertEqual(payload["source_pending_after_batch"], 7)
         self.assertEqual(payload["error_summary"], "")
         self.assertFalse(payload["limit_reached"])
         import_batch.assert_called_once_with(
