@@ -479,6 +479,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum acceptable latest import duration in seconds",
     )
     status_parser.add_argument(
+        "--min-throughput-rows-per-second",
+        type=float,
+        default=None,
+        help="Minimum acceptable latest import throughput in rows per second",
+    )
+    status_parser.add_argument(
         "--fail-on-unhealthy",
         action="store_true",
         help="Return exit code 1 when health.status is not ok",
@@ -557,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.source,
                 daily_limit=args.daily_limit,
                 max_duration_seconds=args.max_duration_seconds,
+                min_throughput_rows_per_second=args.min_throughput_rows_per_second,
             )
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         if args.fail_on_unhealthy and summary["health"]["status"] != "ok":

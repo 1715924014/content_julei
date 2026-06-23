@@ -371,6 +371,7 @@ class Storage:
         source_name: str,
         daily_limit: int | None = None,
         max_duration_seconds: int | None = None,
+        min_throughput_rows_per_second: float | None = None,
     ) -> dict[str, Any]:
         latest_batch = self.connection.execute(
             """
@@ -400,6 +401,11 @@ class Storage:
             and latest_batch_duration_seconds is not None
             and latest_batch_duration_seconds > max_duration_seconds
         )
+        latest_batch_throughput_below_minimum = (
+            min_throughput_rows_per_second is not None
+            and latest_batch_rows_per_second is not None
+            and latest_batch_rows_per_second < min_throughput_rows_per_second
+        )
         pending_review_tasks = self.count_pending_review_tasks()
         return {
             "source_name": source_name,
@@ -409,12 +415,14 @@ class Storage:
             "latest_batch_duration_seconds": latest_batch_duration_seconds,
             "latest_batch_rows_per_second": latest_batch_rows_per_second,
             "latest_batch_duration_exceeded": latest_batch_duration_exceeded,
+            "latest_batch_throughput_below_minimum": latest_batch_throughput_below_minimum,
             "pending_review_tasks": pending_review_tasks,
             "health": self.build_import_health(
                 latest_batch_dict,
                 pending_review_tasks,
                 latest_batch_limit_reached,
                 latest_batch_duration_exceeded,
+                latest_batch_throughput_below_minimum,
             ),
             "table_counts": {
                 table_name: self.count_table(table_name)
@@ -457,6 +465,7 @@ class Storage:
         pending_review_tasks: int,
         latest_batch_limit_reached: bool = False,
         latest_batch_duration_exceeded: bool = False,
+        latest_batch_throughput_below_minimum: bool = False,
     ) -> dict[str, Any]:
         reasons: list[str] = []
         status = "ok"
@@ -475,6 +484,10 @@ class Storage:
                 status = "warning"
         if latest_batch_duration_exceeded:
             reasons.append("latest_batch_exceeded_max_duration")
+            if status == "ok":
+                status = "warning"
+        if latest_batch_throughput_below_minimum:
+            reasons.append("latest_batch_below_min_throughput")
             if status == "ok":
                 status = "warning"
         if pending_review_tasks > 0:
