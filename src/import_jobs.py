@@ -151,12 +151,15 @@ def run_daily_mysql_job(
                 )
                 try:
                     with closing(connect_analysis_db(db_path)) as connection:
-                        summary = Storage(connection).get_import_status_summary("mysql")
+                        summary = Storage(connection).get_import_status_summary("mysql", daily_limit=limit)
                     payload.update(
                         {
                             "health": summary["health"],
                             "pending_review_tasks": summary["pending_review_tasks"],
                             "latest_successful_cursor": summary["latest_successful_cursor"],
+                            "latest_batch_limit_reached": summary["latest_batch_limit_reached"],
+                            "latest_batch_duration_seconds": summary["latest_batch_duration_seconds"],
+                            "latest_batch_rows_per_second": summary["latest_batch_rows_per_second"],
                         }
                     )
                 except Exception as exc:

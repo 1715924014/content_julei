@@ -129,6 +129,15 @@ class ImportJobTests(unittest.TestCase):
                         rows_skipped=0,
                         rows_failed=0,
                     )
+                    connection.execute(
+                        """
+                        UPDATE import_batches
+                        SET started_at = ?, finished_at = ?
+                        WHERE batch_id = ?
+                        """,
+                        ("2026-06-23T00:00:00+00:00", "2026-06-23T00:00:10+00:00", batch_id),
+                    )
+                    connection.commit()
                 return Mock(
                     batch_id=batch_id,
                     rows_read=10,
@@ -155,6 +164,9 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["health"], {"status": "ok", "reasons": []})
         self.assertEqual(payload["pending_review_tasks"], 0)
         self.assertEqual(payload["latest_successful_cursor"], "125")
+        self.assertEqual(payload["latest_batch_duration_seconds"], 10)
+        self.assertEqual(payload["latest_batch_rows_per_second"], 1.0)
+        self.assertFalse(payload["latest_batch_limit_reached"])
 
     def test_daily_mysql_job_logs_health_summary_error_type(self):
         batch = Mock(

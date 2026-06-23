@@ -56,7 +56,7 @@ Daily job status and exit codes: `status=success` returns `0`; `status=partial` 
 
 `--limit` must be a positive integer. Use the default daily value as the normal batch cap, and increase it temporarily only when `limit_reached` shows backlog. Monitoring thresholds such as `--min-throughput-rows-per-second` must also be positive numbers.
 
-Daily job logs include the post-import `health`, `pending_review_tasks`, and `latest_successful_cursor` fields when the status summary can be read. If summary capture fails, the import result is preserved and `health_summary_error` plus `health_summary_error_type` are written for troubleshooting.
+Daily job logs include the post-import `health`, `pending_review_tasks`, `latest_successful_cursor`, `latest_batch_limit_reached`, `latest_batch_duration_seconds`, and `latest_batch_rows_per_second` fields when the status summary can be read. If summary capture fails, the import result is preserved and `health_summary_error` plus `health_summary_error_type` are written for troubleshooting.
 
 A `daily-mysql.lock` file in the log directory prevents overlapping scheduled runs. If a new run sees this lock, it writes a failed job log and exits with code `1` without importing. Locks older than 6 hours are treated as stale and replaced automatically; the job log records `stale_lock_replaced=true`. Only remove a fresh lock manually after confirming no daily import process is still running.
 
