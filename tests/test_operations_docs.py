@@ -27,6 +27,7 @@ class OperationsDocsTests(unittest.TestCase):
             "password environment variable",
             "connect timeout",
             "latest_successful_cursor",
+            "health_summary_error_type",
             "analysis.db-wal",
             "analysis.db-shm",
             "During restore",

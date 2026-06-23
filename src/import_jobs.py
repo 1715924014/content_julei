@@ -161,6 +161,7 @@ def run_daily_mysql_job(
                     )
                 except Exception as exc:
                     payload["health_summary_error"] = str(exc)
+                    payload["health_summary_error_type"] = type(exc).__name__
                 exit_code = 1 if has_failed_rows else 0
             except Exception as exc:
                 payload.update(

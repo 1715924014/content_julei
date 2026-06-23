@@ -156,6 +156,39 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["pending_review_tasks"], 0)
         self.assertEqual(payload["latest_successful_cursor"], "125")
 
+    def test_daily_mysql_job_logs_health_summary_error_type(self):
+        batch = Mock(
+            batch_id=12,
+            rows_read=10,
+            rows_created=10,
+            rows_skipped=0,
+            rows_failed=0,
+            cursor_start="100",
+            cursor_end="110",
+            error_summary="",
+        )
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "src.import_jobs.import_mysql_batch",
+            return_value=batch,
+        ), patch(
+            "src.import_jobs.connect_analysis_db",
+            side_effect=RuntimeError("summary db unavailable"),
+        ):
+            exit_code = run_daily_mysql_job(
+                config_path=Path("config/mysql.json"),
+                db_path=Path("data/analysis.db"),
+                log_dir=Path(directory),
+                limit=1000,
+                cursor_override=None,
+            )
+            logs = list(Path(directory).glob("daily-mysql-*.json"))
+            payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["health_summary_error"], "summary db unavailable")
+        self.assertEqual(payload["health_summary_error_type"], "RuntimeError")
+
     def test_daily_mysql_job_writes_success_log(self):
         batch = Mock(
             batch_id=7,
