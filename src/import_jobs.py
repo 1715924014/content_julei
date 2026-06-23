@@ -69,6 +69,7 @@ def run_daily_mysql_job(
     log_dir: Path,
     limit: int | None = None,
     cursor_override: str | None = None,
+    max_duration_seconds: int | None = None,
     min_throughput_rows_per_second: float | None = None,
 ) -> int:
     started_monotonic = time.perf_counter()
@@ -84,6 +85,7 @@ def run_daily_mysql_job(
         "db_path": str(db_path),
         "limit": limit,
         "cursor_override": cursor_override,
+        "max_duration_seconds": max_duration_seconds,
         "min_throughput_rows_per_second": min_throughput_rows_per_second,
     }
     lock_path = log_dir / "daily-mysql.lock"
@@ -156,6 +158,7 @@ def run_daily_mysql_job(
                         summary = Storage(connection).get_import_status_summary(
                             "mysql",
                             daily_limit=limit,
+                            max_duration_seconds=max_duration_seconds,
                             min_throughput_rows_per_second=min_throughput_rows_per_second,
                         )
                     payload.update(
@@ -166,6 +169,7 @@ def run_daily_mysql_job(
                             "latest_batch_limit_reached": summary["latest_batch_limit_reached"],
                             "latest_batch_duration_seconds": summary["latest_batch_duration_seconds"],
                             "latest_batch_rows_per_second": summary["latest_batch_rows_per_second"],
+                            "latest_batch_duration_exceeded": summary["latest_batch_duration_exceeded"],
                             "latest_batch_throughput_below_minimum": summary[
                                 "latest_batch_throughput_below_minimum"
                             ],

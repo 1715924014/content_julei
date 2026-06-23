@@ -5,6 +5,7 @@ param(
     [string]$LogDir = "logs",
     [string]$BackupRoot = "backups",
     [int]$Limit = 10000,
+    [int]$MaxDurationSeconds = 0,
     [double]$MinThroughputRowsPerSecond = 0,
     [string]$PythonCommand = "python"
 )
@@ -32,6 +33,9 @@ $DailyArgs = @(
     "--log-dir", $LogDir,
     "--limit", $Limit
 )
+if ($MaxDurationSeconds -gt 0) {
+    $DailyArgs += @("--max-duration-seconds", $MaxDurationSeconds)
+}
 if ($MinThroughputRowsPerSecond -gt 0) {
     $DailyArgs += @("--min-throughput-rows-per-second", $MinThroughputRowsPerSecond)
 }

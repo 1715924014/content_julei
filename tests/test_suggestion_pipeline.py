@@ -201,8 +201,30 @@ class SuggestionPipelineTests(unittest.TestCase):
             log_dir=Path("logs"),
             cursor_override=None,
             limit=None,
+            max_duration_seconds=None,
             min_throughput_rows_per_second=None,
         )
+
+    def test_run_daily_mysql_passes_max_duration_threshold(self):
+        with patch("src.suggestion_pipeline.run_daily_mysql_job", return_value=0) as run_job:
+            from src.suggestion_pipeline import main
+
+            exit_code = main(
+                [
+                    "run-daily-mysql",
+                    "--config",
+                    "config.json",
+                    "--db",
+                    "analysis.db",
+                    "--log-dir",
+                    "logs",
+                    "--max-duration-seconds",
+                    "30",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(run_job.call_args.kwargs["max_duration_seconds"], 30)
 
     def test_run_daily_mysql_passes_min_throughput_threshold(self):
         with patch("src.suggestion_pipeline.run_daily_mysql_job", return_value=0) as run_job:

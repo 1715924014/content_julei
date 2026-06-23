@@ -540,6 +540,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     daily_mysql_parser.add_argument("--limit", type=positive_int, default=None, help="Maximum source rows to import")
     daily_mysql_parser.add_argument(
+        "--max-duration-seconds",
+        type=positive_int,
+        default=None,
+        help="Maximum acceptable latest import duration in seconds",
+    )
+    daily_mysql_parser.add_argument(
         "--min-throughput-rows-per-second",
         type=positive_float,
         default=None,
@@ -636,6 +642,7 @@ def main(argv: list[str] | None = None) -> int:
             log_dir=args.log_dir,
             cursor_override=args.cursor,
             limit=args.limit,
+            max_duration_seconds=args.max_duration_seconds,
             min_throughput_rows_per_second=args.min_throughput_rows_per_second,
         )
     parser.error("未知命令")

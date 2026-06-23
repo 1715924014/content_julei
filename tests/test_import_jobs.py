@@ -156,6 +156,7 @@ class ImportJobTests(unittest.TestCase):
                     log_dir=Path(directory),
                     limit=1000,
                     cursor_override=None,
+                    max_duration_seconds=5,
                     min_throughput_rows_per_second=2.0,
                 )
                 logs = list(Path(directory).glob("daily-mysql-*.json"))
@@ -168,8 +169,10 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["latest_batch_rows_per_second"], 1.0)
         self.assertFalse(payload["latest_batch_limit_reached"])
         self.assertTrue(payload["latest_batch_throughput_below_minimum"])
+        self.assertTrue(payload["latest_batch_duration_exceeded"])
         self.assertEqual(payload["health"]["status"], "warning")
         self.assertIn("latest_batch_below_min_throughput", payload["health"]["reasons"])
+        self.assertIn("latest_batch_exceeded_max_duration", payload["health"]["reasons"])
 
     def test_daily_mysql_job_logs_health_summary_error_type(self):
         batch = Mock(
