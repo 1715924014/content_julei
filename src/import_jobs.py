@@ -192,6 +192,7 @@ def run_daily_mysql_job(
                         {
                             "health": summary["health"],
                             "recommended_actions": list(dict.fromkeys(recommended_actions)),
+                            "recommended_commands": summary.get("recommended_commands", []),
                             "pending_review_tasks": summary["pending_review_tasks"],
                             "latest_successful_cursor": summary["latest_successful_cursor"],
                             "latest_batch_limit_reached": summary["latest_batch_limit_reached"],

@@ -246,6 +246,61 @@ class ImportJobTests(unittest.TestCase):
         self.assertIn("latest_batch_below_min_throughput", payload["health"]["reasons"])
         self.assertIn("latest_batch_exceeded_max_duration", payload["health"]["reasons"])
 
+    def test_daily_mysql_job_log_includes_recommended_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+
+            def write_partial_batch(**_kwargs):
+                with closing(connect_analysis_db(db_path)) as connection:
+                    storage = Storage(connection)
+                    storage.initialize_schema()
+                    batch_id = storage.start_import_batch("mysql", cursor_start="100")
+                    storage.record_import_failure(
+                        batch_id=batch_id,
+                        source_suggestion_id="S001",
+                        source_cursor="101",
+                        row_number=1,
+                        error_message="missing raw_text",
+                        raw_row={"id": 101},
+                    )
+                    storage.finish_import_batch(
+                        batch_id,
+                        "101",
+                        rows_read=1,
+                        rows_created=0,
+                        rows_skipped=0,
+                        rows_failed=1,
+                        error_summary="1 row missing raw_text",
+                    )
+                return Mock(
+                    batch_id=batch_id,
+                    rows_read=1,
+                    rows_created=0,
+                    rows_skipped=0,
+                    rows_failed=1,
+                    cursor_start="100",
+                    cursor_end="101",
+                    error_summary="1 row missing raw_text",
+                )
+
+            with patch("src.import_jobs.import_mysql_batch", side_effect=write_partial_batch):
+                exit_code = run_daily_mysql_job(
+                    config_path=Path("config/mysql.json"),
+                    db_path=db_path,
+                    log_dir=Path(directory),
+                    limit=1000,
+                    cursor_override=None,
+                )
+                logs = list(Path(directory).glob("daily-mysql-*.json"))
+                payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("export_import_failures_and_repair_rows", payload["recommended_actions"])
+        self.assertIn(
+            "python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --latest --output data/latest_import_failures.csv",
+            payload["recommended_commands"],
+        )
+
     def test_daily_mysql_job_logs_health_summary_error_type(self):
         batch = Mock(
             batch_id=12,
