@@ -22,6 +22,7 @@ class OperationsDocsTests(unittest.TestCase):
             "log cleanup failed",
             "daily-mysql-*.json",
             "rows_failed",
+            "failed rows return a non-zero exit code",
             "error_type",
             "lock_path",
             "lock_started_at",

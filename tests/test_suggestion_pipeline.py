@@ -104,6 +104,26 @@ class SuggestionPipelineTests(unittest.TestCase):
             limit=1000,
         )
 
+    def test_import_mysql_returns_failure_when_rows_fail(self):
+        batch_result = Mock(batch_id=1, rows_read=10, rows_created=8, rows_skipped=0, rows_failed=2)
+
+        with patch("src.suggestion_pipeline.import_mysql_batch", return_value=batch_result):
+            from src.suggestion_pipeline import main
+
+            exit_code = main(
+                [
+                    "import-mysql",
+                    "--config",
+                    "config.json",
+                    "--db",
+                    "analysis.db",
+                    "--limit",
+                    "1000",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+
     def test_import_mysql_rejects_non_positive_limit(self):
         with patch("src.suggestion_pipeline.import_mysql_batch") as import_batch:
             from src.suggestion_pipeline import main

@@ -12,6 +12,7 @@ class ReadmeTests(unittest.TestCase):
             "run_daily_mysql.ps1",
             "每天 7000-10000 条",
             "latest_successful_cursor",
+            "failed rows return a non-zero exit code",
             "source_pending_after_batch",
             "recommended_actions",
             "export-review-tasks",
