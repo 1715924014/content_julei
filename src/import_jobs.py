@@ -186,6 +186,7 @@ def run_daily_mysql_job(
                             daily_limit=limit,
                             max_duration_seconds=max_duration_seconds,
                             min_throughput_rows_per_second=min_throughput_rows_per_second,
+                            command_db_path=str(db_path),
                         )
                     recommended_actions = list(summary["recommended_actions"]) + recommended_actions
                     payload.update(

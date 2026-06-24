@@ -389,6 +389,7 @@ class Storage:
         daily_limit: int | None = None,
         max_duration_seconds: int | None = None,
         min_throughput_rows_per_second: float | None = None,
+        command_db_path: str = "data/analysis.db",
     ) -> dict[str, Any]:
         latest_batch = self.connection.execute(
             """
@@ -444,7 +445,7 @@ class Storage:
             "pending_review_tasks": pending_review_tasks,
             "health": health,
             "recommended_actions": recommended_actions,
-            "recommended_commands": self.build_import_recommended_commands(recommended_actions),
+            "recommended_commands": self.build_import_recommended_commands(recommended_actions, db_path=command_db_path),
             "table_counts": {
                 table_name: self.count_table(table_name)
                 for table_name in sorted(COUNTABLE_TABLES)
@@ -463,12 +464,12 @@ class Storage:
         }
         return [action_by_reason[reason] for reason in reasons if reason in action_by_reason]
 
-    def build_import_recommended_commands(self, actions: list[str]) -> list[str]:
+    def build_import_recommended_commands(self, actions: list[str], *, db_path: str = "data/analysis.db") -> list[str]:
         command_by_action = {
-            "run_initial_import": "python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db data/analysis.db --log-dir logs --limit 10000",
-            "export_import_failures_and_repair_rows": "python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --latest --output data/latest_import_failures.csv",
-            "run_additional_import_or_increase_limit": "python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db data/analysis.db --log-dir logs --limit 10000",
-            "review_pending_cluster_tasks": "python -m src.suggestion_pipeline export-review-tasks --db data/analysis.db --output data/review_tasks.csv",
+            "run_initial_import": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {db_path} --log-dir logs --limit 10000",
+            "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {db_path} --latest --output data/latest_import_failures.csv",
+            "run_additional_import_or_increase_limit": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {db_path} --log-dir logs --limit 10000",
+            "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {db_path} --output data/review_tasks.csv",
         }
         return [command_by_action[action] for action in actions if action in command_by_action]
 

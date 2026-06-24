@@ -596,6 +596,7 @@ def main(argv: list[str] | None = None) -> int:
                 daily_limit=args.daily_limit,
                 max_duration_seconds=args.max_duration_seconds,
                 min_throughput_rows_per_second=args.min_throughput_rows_per_second,
+                command_db_path=str(args.db),
             )
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         if args.fail_on_unhealthy and summary["health"]["status"] != "ok":

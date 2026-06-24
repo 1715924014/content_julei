@@ -297,7 +297,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("export_import_failures_and_repair_rows", payload["recommended_actions"])
         self.assertIn(
-            "python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --latest --output data/latest_import_failures.csv",
+            f"python -m src.suggestion_pipeline export-import-failures --db {db_path} --latest --output data/latest_import_failures.csv",
             payload["recommended_commands"],
         )
 
