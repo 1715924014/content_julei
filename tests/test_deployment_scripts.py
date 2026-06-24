@@ -22,6 +22,9 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("$LogRetentionDays", content)
         self.assertIn("daily-mysql-*.json", content)
         self.assertIn("Remove-Item", content)
+        self.assertIn("try {", content)
+        self.assertIn("Write-Warning", content)
+        self.assertIn("exit $DailyExitCode", content)
         self.assertLess(content.index("doctor"), content.index("run-daily-mysql"))
 
     def test_backup_script_copies_database_and_logs(self):

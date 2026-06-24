@@ -45,10 +45,15 @@ if ($MinThroughputRowsPerSecond -gt 0) {
 $DailyExitCode = $LASTEXITCODE
 
 if ($LogRetentionDays -gt 0) {
-    $LogCutoff = (Get-Date).AddDays(-$LogRetentionDays)
-    Get-ChildItem -Path $LogDir -Filter "daily-mysql-*.json" -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.LastWriteTime -lt $LogCutoff } |
-        Remove-Item -Force
+    try {
+        $LogCutoff = (Get-Date).AddDays(-$LogRetentionDays)
+        Get-ChildItem -Path $LogDir -Filter "daily-mysql-*.json" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -lt $LogCutoff } |
+            Remove-Item -Force -ErrorAction Stop
+    }
+    catch {
+        Write-Warning "Daily MySQL log cleanup failed: $($_.Exception.Message)"
+    }
 }
 
 exit $DailyExitCode
