@@ -46,6 +46,14 @@ def connect_analysis_db(path: str | Path) -> sqlite3.Connection:
     return connection
 
 
+def format_command_arg(value: str) -> str:
+    if not value:
+        return '""'
+    if not any(character.isspace() or character == '"' for character in value):
+        return value
+    return f'"{value.replace(chr(34), chr(92) + chr(34))}"'
+
+
 class Storage:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection
@@ -465,11 +473,12 @@ class Storage:
         return [action_by_reason[reason] for reason in reasons if reason in action_by_reason]
 
     def build_import_recommended_commands(self, actions: list[str], *, db_path: str = "data/analysis.db") -> list[str]:
+        command_db_path = format_command_arg(db_path)
         command_by_action = {
-            "run_initial_import": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {db_path} --log-dir logs --limit 10000",
-            "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {db_path} --latest --output data/latest_import_failures.csv",
-            "run_additional_import_or_increase_limit": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {db_path} --log-dir logs --limit 10000",
-            "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {db_path} --output data/review_tasks.csv",
+            "run_initial_import": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {command_db_path} --log-dir logs --limit 10000",
+            "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output data/latest_import_failures.csv",
+            "run_additional_import_or_increase_limit": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {command_db_path} --log-dir logs --limit 10000",
+            "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output data/review_tasks.csv",
         }
         return [command_by_action[action] for action in actions if action in command_by_action]
 

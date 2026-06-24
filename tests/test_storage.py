@@ -295,6 +295,34 @@ class StorageTests(unittest.TestCase):
             summary["recommended_commands"],
         )
 
+    def test_import_status_summary_quotes_command_db_path_with_spaces(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="0")
+        storage.record_import_failure(
+            batch_id=batch_id,
+            source_suggestion_id="S001",
+            source_cursor="1",
+            row_number=1,
+            error_message="missing raw_text",
+            raw_row={"id": 1},
+        )
+        storage.finish_import_batch(
+            batch_id,
+            "1",
+            rows_read=1,
+            rows_created=0,
+            rows_skipped=0,
+            rows_failed=1,
+            error_summary="1 row missing raw_text",
+        )
+
+        summary = storage.get_import_status_summary("mysql", command_db_path="data/analysis prod.db")
+
+        self.assertIn(
+            'python -m src.suggestion_pipeline export-import-failures --db "data/analysis prod.db" --latest --output data/latest_import_failures.csv',
+            summary["recommended_commands"],
+        )
+
     def test_import_status_summary_warns_when_latest_batch_is_running(self):
         storage = self.make_storage()
         storage.start_import_batch("mysql", cursor_start="100")
