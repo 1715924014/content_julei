@@ -548,6 +548,10 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["source_pending_error_summary"], "count unavailable")
         self.assertIn("source_pending_count_unavailable", payload["warnings"])
         self.assertIn("inspect_source_pending_count", payload["recommended_actions"])
+        self.assertIn(
+            f"python -m src.suggestion_pipeline doctor --config {Path('config/mysql.json')} --db {Path('data/analysis.db')}",
+            payload["recommended_commands"],
+        )
 
     def test_daily_mysql_job_returns_error_code_for_partial_batch(self):
         batch = Mock(

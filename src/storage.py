@@ -500,6 +500,7 @@ class Storage:
             "run_initial_import": run_daily_command,
             "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output data/latest_import_failures.csv",
             "run_additional_import_or_increase_limit": run_daily_command,
+            "inspect_source_pending_count": f"python -m src.suggestion_pipeline doctor --config {command_config_path} --db {command_db_path}",
             "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output data/review_tasks.csv",
         }
         return [command_by_action[action] for action in actions if action in command_by_action]
