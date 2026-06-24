@@ -261,6 +261,11 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(summary["table_counts"]["source_suggestions"], 1)
         self.assertEqual(summary["health"]["status"], "attention")
         self.assertIn("latest_batch_has_failed_rows", summary["health"]["reasons"])
+        self.assertIn("export_import_failures_and_repair_rows", summary["recommended_actions"])
+        self.assertIn(
+            "python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --latest --output data/latest_import_failures.csv",
+            summary["recommended_commands"],
+        )
 
     def test_import_status_summary_warns_when_latest_batch_is_running(self):
         storage = self.make_storage()

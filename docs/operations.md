@@ -81,6 +81,7 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 - `health.status`: `ok` means the latest import is clean; `warning` means follow-up is needed, such as pending review tasks; `attention` means failed import rows need immediate handling.
 - `health.reasons`: machine-readable reasons such as `latest_batch_has_failed_rows`, `latest_batch_still_running`, `latest_batch_reached_daily_limit`, `latest_batch_exceeded_max_duration`, `latest_batch_below_min_throughput`, and `pending_review_tasks`.
 - `recommended_actions`: machine-readable next steps derived from `health.reasons`, such as `export_import_failures_and_repair_rows`, `run_additional_import_or_increase_limit`, `review_runtime_capacity`, `optimize_import_throughput`, and `review_pending_cluster_tasks`.
+- `recommended_commands`: copyable commands derived from `recommended_actions`, such as `export-import-failures --latest` for failed rows or `export-review-tasks` for pending review work.
 - `latest_batch_limit_reached`: true when `status --daily-limit N` shows the latest batch read at least `N` rows, which means the daily cap may be hiding backlog.
 - `latest_batch_duration_seconds`: latest finished batch runtime in seconds; use it to watch whether daily imports stay within the expected processing window.
 - `latest_batch_rows_per_second`: latest finished batch throughput, calculated from `rows_read / latest_batch_duration_seconds`.

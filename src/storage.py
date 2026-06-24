@@ -431,6 +431,7 @@ class Storage:
             latest_batch_duration_exceeded,
             latest_batch_throughput_below_minimum,
         )
+        recommended_actions = self.build_import_recommended_actions(health["reasons"])
         return {
             "source_name": source_name,
             "latest_successful_cursor": self.get_latest_successful_cursor(source_name),
@@ -442,7 +443,8 @@ class Storage:
             "latest_batch_throughput_below_minimum": latest_batch_throughput_below_minimum,
             "pending_review_tasks": pending_review_tasks,
             "health": health,
-            "recommended_actions": self.build_import_recommended_actions(health["reasons"]),
+            "recommended_actions": recommended_actions,
+            "recommended_commands": self.build_import_recommended_commands(recommended_actions),
             "table_counts": {
                 table_name: self.count_table(table_name)
                 for table_name in sorted(COUNTABLE_TABLES)
@@ -460,6 +462,15 @@ class Storage:
             "pending_review_tasks": "review_pending_cluster_tasks",
         }
         return [action_by_reason[reason] for reason in reasons if reason in action_by_reason]
+
+    def build_import_recommended_commands(self, actions: list[str]) -> list[str]:
+        command_by_action = {
+            "run_initial_import": "python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db data/analysis.db --log-dir logs --limit 10000",
+            "export_import_failures_and_repair_rows": "python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --latest --output data/latest_import_failures.csv",
+            "run_additional_import_or_increase_limit": "python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db data/analysis.db --log-dir logs --limit 10000",
+            "review_pending_cluster_tasks": "python -m src.suggestion_pipeline export-review-tasks --db data/analysis.db --output data/review_tasks.csv",
+        }
+        return [command_by_action[action] for action in actions if action in command_by_action]
 
     def calculate_batch_duration_seconds(self, batch: dict[str, Any] | None) -> int | None:
         if batch is None or not batch.get("started_at") or not batch.get("finished_at"):

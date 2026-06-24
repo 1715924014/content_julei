@@ -43,6 +43,7 @@ class OperationsDocsTests(unittest.TestCase):
             "latest_batch_throughput_below_minimum",
             "latest_batch_below_min_throughput",
             "recommended_actions",
+            "recommended_commands",
             "run_additional_import_or_increase_limit",
             "optimize_import_throughput",
             "review_runtime_capacity",

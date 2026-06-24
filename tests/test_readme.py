@@ -16,6 +16,7 @@ class ReadmeTests(unittest.TestCase):
             "Manual `import-csv` and `import-mysql`",
             "source_pending_after_batch",
             "recommended_actions",
+            "recommended_commands",
             "export-review-tasks",
             "--latest",
             "import-review-results",
