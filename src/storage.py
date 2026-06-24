@@ -498,6 +498,7 @@ class Storage:
             run_daily_command += f" --min-throughput-rows-per-second {min_throughput_rows_per_second}"
         command_by_action = {
             "run_initial_import": run_daily_command,
+            "inspect_running_import_or_lock": f"python -m src.suggestion_pipeline status --db {command_db_path} --source mysql --fail-on-unhealthy",
             "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output data/latest_import_failures.csv",
             "run_additional_import_or_increase_limit": run_daily_command,
             "inspect_source_pending_count": f"python -m src.suggestion_pipeline doctor --config {command_config_path} --db {command_db_path}",

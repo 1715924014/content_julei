@@ -327,10 +327,15 @@ class StorageTests(unittest.TestCase):
         storage = self.make_storage()
         storage.start_import_batch("mysql", cursor_start="100")
 
-        summary = storage.get_import_status_summary("mysql")
+        summary = storage.get_import_status_summary("mysql", command_db_path="data/analysis.db")
 
         self.assertEqual(summary["health"]["status"], "warning")
         self.assertIn("latest_batch_still_running", summary["health"]["reasons"])
+        self.assertIn("inspect_running_import_or_lock", summary["recommended_actions"])
+        self.assertIn(
+            "python -m src.suggestion_pipeline status --db data/analysis.db --source mysql --fail-on-unhealthy",
+            summary["recommended_commands"],
+        )
 
     def test_import_status_summary_warns_when_review_tasks_are_pending(self):
         storage = self.make_storage()
