@@ -20,6 +20,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("$MinThroughputRowsPerSecond", content)
         self.assertIn("--min-throughput-rows-per-second", content)
         self.assertIn("$LogRetentionDays", content)
+        self.assertIn("$LogRetentionDays -lt 0", content)
+        self.assertIn("LogRetentionDays must be zero or positive", content)
         self.assertIn("daily-mysql-*.json", content)
         self.assertIn("Remove-Item", content)
         self.assertIn("try {", content)

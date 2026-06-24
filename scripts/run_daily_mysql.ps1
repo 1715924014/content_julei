@@ -16,6 +16,9 @@ $ErrorActionPreference = "Stop"
 if (-not $env:MINI_PROGRAM_DB_PASSWORD) {
     Write-Error "MINI_PROGRAM_DB_PASSWORD is required before running the daily MySQL import."
 }
+if ($LogRetentionDays -lt 0) {
+    Write-Error "LogRetentionDays must be zero or positive."
+}
 
 Set-Location $ProjectRoot
 

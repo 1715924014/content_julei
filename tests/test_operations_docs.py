@@ -15,6 +15,7 @@ class OperationsDocsTests(unittest.TestCase):
             "--cursor",
             "logs",
             "LogRetentionDays",
+            "zero or positive",
             "log cleanup failed",
             "daily-mysql-*.json",
             "rows_failed",
