@@ -473,12 +473,27 @@ class Storage:
         return [action_by_reason[reason] for reason in reasons if reason in action_by_reason]
 
     @staticmethod
-    def build_import_recommended_commands(actions: list[str], *, db_path: str = "data/analysis.db") -> list[str]:
+    def build_import_recommended_commands(
+        actions: list[str],
+        *,
+        db_path: str = "data/analysis.db",
+        config_path: str = "config/mysql.prod.json",
+        log_dir: str = "logs",
+        limit: int | None = 10000,
+    ) -> list[str]:
         command_db_path = format_command_arg(db_path)
+        command_config_path = format_command_arg(config_path)
+        command_log_dir = format_command_arg(log_dir)
+        command_limit = 10000 if limit is None else limit
+        run_daily_command = (
+            "python -m src.suggestion_pipeline run-daily-mysql "
+            f"--config {command_config_path} --db {command_db_path} "
+            f"--log-dir {command_log_dir} --limit {command_limit}"
+        )
         command_by_action = {
-            "run_initial_import": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {command_db_path} --log-dir logs --limit 10000",
+            "run_initial_import": run_daily_command,
             "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output data/latest_import_failures.csv",
-            "run_additional_import_or_increase_limit": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {command_db_path} --log-dir logs --limit 10000",
+            "run_additional_import_or_increase_limit": run_daily_command,
             "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output data/review_tasks.csv",
         }
         return [command_by_action[action] for action in actions if action in command_by_action]

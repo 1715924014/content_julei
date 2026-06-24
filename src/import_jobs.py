@@ -211,6 +211,9 @@ def run_daily_mysql_job(
                 payload["recommended_commands"] = Storage.build_import_recommended_commands(
                     recommended_actions,
                     db_path=str(db_path),
+                    config_path=str(config_path),
+                    log_dir=str(log_dir),
+                    limit=limit,
                 )
                 exit_code = 1 if has_failed_rows else 0
             except Exception as exc:
