@@ -116,6 +116,7 @@ If the latest batch reports failed rows, export the persisted row-level failure 
 
 ```powershell
 python -m src.suggestion_pipeline export-import-failures --db output_run_check/analysis.db --batch-id <batch_id> --output output_run_check/import_failures.csv
+python -m src.suggestion_pipeline export-import-failures --db output_run_check/analysis.db --latest --output output_run_check/latest_import_failures.csv
 ```
 
 从增量分析库导出当前业务结果，生成 `suggestions_analyzed.csv`、`clusters.csv`、`action_items.csv` 和 `weekly_report.md`：

@@ -173,6 +173,7 @@ Failed row details are persisted in `import_failures` with source ID, source cur
 
 ```powershell
 python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --batch-id <batch_id> --output data/import_failures.csv
+python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --latest --output data/latest_import_failures.csv
 ```
 
-Use the exported CSV to fix source records or replay the affected cursor range after configuration changes.
+Use `--latest` during routine daily triage to export the most recent failed MySQL batch without first looking up its batch id. Use the exported CSV to fix source records or replay the affected cursor range after configuration changes.

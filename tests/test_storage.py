@@ -85,6 +85,49 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(failures[0]["error_message"], "missing raw_text")
         self.assertIn('"raw_text": ""', failures[0]["raw_row_json"])
 
+    def test_get_latest_failure_batch_id_returns_most_recent_batch_with_failures(self):
+        storage = self.make_storage()
+        first = storage.start_import_batch("mysql", cursor_start="100")
+        storage.record_import_failure(
+            batch_id=first,
+            source_suggestion_id="M001",
+            source_cursor="101",
+            row_number=1,
+            error_message="missing raw_text",
+            raw_row={"id": 101},
+        )
+        empty = storage.start_import_batch("mysql", cursor_start="101")
+        storage.finish_import_batch(
+            empty,
+            "102",
+            rows_read=1,
+            rows_created=1,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+        latest = storage.start_import_batch("mysql", cursor_start="102")
+        storage.record_import_failure(
+            batch_id=latest,
+            source_suggestion_id="M003",
+            source_cursor="103",
+            row_number=1,
+            error_message="invalid id",
+            raw_row={"id": 103},
+        )
+        other_source = storage.start_import_batch("csv", cursor_start="0")
+        storage.record_import_failure(
+            batch_id=other_source,
+            source_suggestion_id="C001",
+            source_cursor="1",
+            row_number=1,
+            error_message="csv error",
+            raw_row={"id": 1},
+        )
+
+        self.assertEqual(storage.get_latest_failure_batch_id("mysql"), latest)
+        self.assertEqual(storage.get_latest_failure_batch_id("csv"), other_source)
+        self.assertIsNone(storage.get_latest_failure_batch_id("missing"))
+
     def test_import_batch_lifecycle_stores_success_status_cursor_and_counts(self):
         storage = self.make_storage()
 

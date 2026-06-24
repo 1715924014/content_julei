@@ -678,6 +678,62 @@ class SuggestionPipelineTests(unittest.TestCase):
             self.assertEqual(rows[0]["error_message"], "missing raw_text")
             self.assertEqual(rows[0]["raw_row_json"], '{"department": "Production", "id": 102}')
 
+    def test_export_import_failures_latest_uses_most_recent_failed_mysql_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            output_path = Path(directory) / "latest_import_failures.csv"
+            with closing(sqlite3.connect(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                old_batch = storage.start_import_batch(source_name="mysql", cursor_start="100")
+                storage.record_import_failure(
+                    batch_id=old_batch,
+                    source_suggestion_id="S001",
+                    source_cursor="101",
+                    row_number=1,
+                    error_message="old failure",
+                    raw_row={"id": 101},
+                )
+                clean_batch = storage.start_import_batch(source_name="mysql", cursor_start="101")
+                storage.finish_import_batch(
+                    clean_batch,
+                    "102",
+                    rows_read=1,
+                    rows_created=1,
+                    rows_skipped=0,
+                    rows_failed=0,
+                )
+                latest_batch = storage.start_import_batch(source_name="mysql", cursor_start="102")
+                storage.record_import_failure(
+                    batch_id=latest_batch,
+                    source_suggestion_id="S003",
+                    source_cursor="103",
+                    row_number=1,
+                    error_message="latest failure",
+                    raw_row={"id": 103},
+                )
+
+            from src.suggestion_pipeline import main
+
+            exit_code = main(
+                [
+                    "export-import-failures",
+                    "--db",
+                    str(db_path),
+                    "--latest",
+                    "--output",
+                    str(output_path),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            with output_path.open("r", encoding="utf-8-sig", newline="") as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["batch_id"], str(latest_batch))
+            self.assertEqual(rows[0]["source_suggestion_id"], "S003")
+            self.assertEqual(rows[0]["error_message"], "latest failure")
+
     def test_import_review_results_applies_csv_decisions(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "analysis.db"

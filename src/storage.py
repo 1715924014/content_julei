@@ -342,6 +342,23 @@ class Storage:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def get_latest_failure_batch_id(self, source_name: str) -> int | None:
+        row = self.connection.execute(
+            """
+            SELECT failures.batch_id
+            FROM import_failures AS failures
+            JOIN import_batches AS batches
+                ON batches.batch_id = failures.batch_id
+            WHERE batches.source_name = ?
+            ORDER BY failures.batch_id DESC
+            LIMIT 1
+            """,
+            (source_name,),
+        ).fetchone()
+        if row is None:
+            return None
+        return int(row["batch_id"])
+
     def get_import_batch(self, batch_id: int) -> sqlite3.Row:
         row = self.connection.execute(
             "SELECT * FROM import_batches WHERE batch_id = ?",

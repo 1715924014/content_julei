@@ -15,6 +15,7 @@ class ReadmeTests(unittest.TestCase):
             "source_pending_after_batch",
             "recommended_actions",
             "export-review-tasks",
+            "--latest",
             "import-review-results",
             "backup_analysis.ps1",
             "docs/operations.md",

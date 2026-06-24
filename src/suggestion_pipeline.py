@@ -298,11 +298,20 @@ def export_review_tasks(db_path: Path, output: Path) -> int:
     return len(rows)
 
 
-def export_import_failures(db_path: Path, batch_id: int, output: Path) -> int:
+def export_import_failures(
+    db_path: Path,
+    batch_id: int | None,
+    output: Path,
+    *,
+    latest: bool = False,
+    source_name: str = "mysql",
+) -> int:
     with closing(connect_analysis_db(db_path)) as connection:
         storage = Storage(connection)
         storage.initialize_schema()
-        failures = storage.list_import_failures(batch_id)
+        if latest:
+            batch_id = storage.get_latest_failure_batch_id(source_name)
+        failures = [] if batch_id is None else storage.list_import_failures(batch_id)
     rows = stringify_rows(failures, IMPORT_FAILURE_EXPORT_FIELDS)
     write_csv(output, IMPORT_FAILURE_EXPORT_FIELDS, rows)
     return len(rows)
@@ -508,7 +517,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     export_failure_parser = subparsers.add_parser("export-import-failures", help="Export failed import rows to CSV")
     export_failure_parser.add_argument("--db", required=True, type=Path, help="SQLite database path")
-    export_failure_parser.add_argument("--batch-id", required=True, type=int, help="Import batch id to inspect")
+    failure_batch_group = export_failure_parser.add_mutually_exclusive_group(required=True)
+    failure_batch_group.add_argument("--batch-id", type=int, help="Import batch id to inspect")
+    failure_batch_group.add_argument("--latest", action="store_true", help="Use the latest batch with failed rows")
+    export_failure_parser.add_argument("--source", default="mysql", help="Import source name used with --latest")
     export_failure_parser.add_argument("--output", required=True, type=Path, help="Failed import rows CSV output path")
 
     import_review_parser = subparsers.add_parser("import-review-results", help="Import reviewed task decisions from CSV")
@@ -603,7 +615,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Exported pending review tasks: {exported} -> {args.output}")
         return 0
     if args.command == "export-import-failures":
-        exported = export_import_failures(args.db, args.batch_id, args.output)
+        exported = export_import_failures(
+            args.db,
+            args.batch_id,
+            args.output,
+            latest=args.latest,
+            source_name=args.source,
+        )
         print(f"Exported import failures: {exported} -> {args.output}")
         return 0
     if args.command == "import-review-results":

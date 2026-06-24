@@ -45,6 +45,7 @@ class OperationsDocsTests(unittest.TestCase):
             "optimize_import_throughput",
             "review_runtime_capacity",
             "export_import_failures_and_repair_rows",
+            "--latest",
             "--min-throughput-rows-per-second",
             "latest_batch_duration_exceeded",
             "latest_batch_exceeded_max_duration",
