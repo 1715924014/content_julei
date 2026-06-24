@@ -1,6 +1,6 @@
 # 员工问题建议分类聚类与整改闭环工具
 
-这是一个本地 CSV 分析工具，用于把员工原始建议整理成“原文不改、可分类、可聚类、可派单、可复盘”的整改闭环数据。
+这是一个本地 CSV 分析工具，用于把员工原始建议整理成“原文不改、可分类、可聚类、可派单、可复盘”的整改闭环数据。 支持每天 7000-10000 条 MySQL 增量导入。
 
 ## 快速开始
 
@@ -90,7 +90,7 @@ python -m src.suggestion_pipeline import-mysql --config config/mysql.example.jso
 
 `config/mysql.example.json` 中的 `field_mapping` 用来把小程序表字段映射到分析管道需要的输入字段。生产环境请复制一份私有配置文件并修改连接信息，不要把真实密码写入配置文件；`config/*.prod.json` 和 `config/*.local.json` 默认会被 Git 忽略。
 
-MySQL 导入会自动读取上一批成功导入的 `cursor_end` 作为下一次的增量起点；首次导入没有历史游标时从空游标开始。需要补数或故障恢复时，可以显式传入 `--cursor 12345` 覆盖自动游标。
+MySQL 导入会自动读取上一批成功导入的 `cursor_end` 作为下一次的增量起点；首次导入没有历史游标时从空游标开始。需要补数或故障恢复时，可以显式传入 `--cursor 12345` 覆盖自动游标。 Use `latest_successful_cursor` in `status` output to verify the next automatic resume position.
 
 每日计划任务建议调用固定入口，它会执行 MySQL 增量导入并在 `logs/` 下写入 JSON 运行日志；失败时命令返回非 0，方便任务计划程序识别告警：
 
@@ -103,6 +103,8 @@ Windows 任务计划程序可以直接调用脚本，先在运行账号下配置
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File scripts/run_daily_mysql.ps1 -ProjectRoot D:\PyWorkspace\content_fenlei -ConfigPath config\mysql.example.json -DbPath data\analysis.db -LogDir logs -BackupRoot backups -Limit 10000
 ```
+
+Daily JSON logs include `source_pending_after_batch`, `recommended_actions`, `warnings`, `rows_failed`, and `limit_reached`. When `source_pending_after_batch` is greater than zero, run an extra import or temporarily raise `-Limit`; when `recommended_actions` is present, handle the listed repair, throughput, duration, or review-backlog action first.
 
 查看最近导入批次、最新成功游标和核心表数量：
 
