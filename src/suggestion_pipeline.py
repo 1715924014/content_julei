@@ -640,7 +640,7 @@ def main(argv: list[str] | None = None) -> int:
             f"Imported batch {result.batch_id}: read={result.rows_read}, "
             f"created={result.rows_created}, skipped={result.rows_skipped}, failed={result.rows_failed}"
         )
-        return 0
+        return 1 if result.rows_failed > 0 else 0
     if args.command == "import-mysql":
         result = import_mysql_batch(
             config_path=args.config,

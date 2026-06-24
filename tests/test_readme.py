@@ -13,6 +13,7 @@ class ReadmeTests(unittest.TestCase):
             "每天 7000-10000 条",
             "latest_successful_cursor",
             "failed rows return a non-zero exit code",
+            "Manual `import-csv` and `import-mysql`",
             "source_pending_after_batch",
             "recommended_actions",
             "export-review-tasks",

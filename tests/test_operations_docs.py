@@ -23,6 +23,7 @@ class OperationsDocsTests(unittest.TestCase):
             "daily-mysql-*.json",
             "rows_failed",
             "failed rows return a non-zero exit code",
+            "Manual `import-csv` and `import-mysql`",
             "error_type",
             "lock_path",
             "lock_started_at",

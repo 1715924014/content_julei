@@ -76,6 +76,27 @@ class SuggestionPipelineTests(unittest.TestCase):
         self.assertEqual(suggestions[1].analysis["quality_type"], "重复问题")
         self.assertIn("疑似重复", suggestions[1].analysis["validation_flags"])
 
+    def test_import_csv_returns_failure_when_rows_fail(self):
+        batch_result = Mock(batch_id=1, rows_read=3, rows_created=2, rows_skipped=0, rows_failed=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+            input_path = Path(directory) / "suggestions.csv"
+            with patch("src.suggestion_pipeline.run_csv_import_batch", return_value=batch_result):
+                from src.suggestion_pipeline import main
+
+                exit_code = main(
+                    [
+                        "import-csv",
+                        "--input",
+                        str(input_path),
+                        "--db",
+                        str(db_path),
+                    ]
+                )
+
+        self.assertEqual(exit_code, 1)
+
     def test_import_mysql_delegates_to_import_job(self):
         batch_result = Mock(batch_id=1, rows_read=0, rows_created=0, rows_skipped=0, rows_failed=0)
 
