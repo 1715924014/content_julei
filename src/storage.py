@@ -480,6 +480,8 @@ class Storage:
         config_path: str = "config/mysql.prod.json",
         log_dir: str = "logs",
         limit: int | None = 10000,
+        max_duration_seconds: int | None = None,
+        min_throughput_rows_per_second: float | None = None,
     ) -> list[str]:
         command_db_path = format_command_arg(db_path)
         command_config_path = format_command_arg(config_path)
@@ -490,6 +492,10 @@ class Storage:
             f"--config {command_config_path} --db {command_db_path} "
             f"--log-dir {command_log_dir} --limit {command_limit}"
         )
+        if max_duration_seconds is not None:
+            run_daily_command += f" --max-duration-seconds {max_duration_seconds}"
+        if min_throughput_rows_per_second is not None:
+            run_daily_command += f" --min-throughput-rows-per-second {min_throughput_rows_per_second}"
         command_by_action = {
             "run_initial_import": run_daily_command,
             "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output data/latest_import_failures.csv",

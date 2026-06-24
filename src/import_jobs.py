@@ -214,6 +214,8 @@ def run_daily_mysql_job(
                     config_path=str(config_path),
                     log_dir=str(log_dir),
                     limit=limit,
+                    max_duration_seconds=max_duration_seconds,
+                    min_throughput_rows_per_second=min_throughput_rows_per_second,
                 )
                 exit_code = 1 if has_failed_rows else 0
             except Exception as exc:

@@ -475,6 +475,8 @@ class ImportJobTests(unittest.TestCase):
                     log_dir=log_dir,
                     limit=500,
                     cursor_override=None,
+                    max_duration_seconds=1800,
+                    min_throughput_rows_per_second=2.5,
                 )
                 logs = list(log_dir.glob("daily-mysql-*.json"))
                 payload = json.loads(logs[0].read_text(encoding="utf-8"))
@@ -482,7 +484,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("run_additional_import_or_increase_limit", payload["recommended_actions"])
         self.assertIn(
-            f'python -m src.suggestion_pipeline run-daily-mysql --config "{config_path}" --db "{db_path}" --log-dir "{log_dir}" --limit 500',
+            f'python -m src.suggestion_pipeline run-daily-mysql --config "{config_path}" --db "{db_path}" --log-dir "{log_dir}" --limit 500 --max-duration-seconds 1800 --min-throughput-rows-per-second 2.5',
             payload["recommended_commands"],
         )
 
