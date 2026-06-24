@@ -50,6 +50,7 @@ class OperationsDocsTests(unittest.TestCase):
             "run_additional_import_or_increase_limit",
             "optimize_import_throughput",
             "review_runtime_capacity",
+            "recommended_commands includes threshold status commands for review_runtime_capacity and optimize_import_throughput",
             "export_import_failures_and_repair_rows",
             "--latest",
             "--min-throughput-rows-per-second",
