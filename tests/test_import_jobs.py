@@ -387,6 +387,55 @@ class ImportJobTests(unittest.TestCase):
             limit=1000,
         )
 
+    def test_daily_mysql_job_adds_recommended_command_for_source_backlog(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "analysis.db"
+
+            def write_success_batch(**_kwargs):
+                with closing(connect_analysis_db(db_path)) as connection:
+                    storage = Storage(connection)
+                    storage.initialize_schema()
+                    batch_id = storage.start_import_batch("mysql", cursor_start="100")
+                    storage.finish_import_batch(
+                        batch_id,
+                        "125",
+                        rows_read=25,
+                        rows_created=25,
+                        rows_skipped=0,
+                        rows_failed=0,
+                    )
+                return Mock(
+                    batch_id=batch_id,
+                    rows_read=25,
+                    rows_created=25,
+                    rows_skipped=0,
+                    rows_failed=0,
+                    cursor_start="100",
+                    cursor_end="125",
+                    error_summary="",
+                    source_pending_after_batch=50,
+                )
+
+            with patch("src.import_jobs.import_mysql_batch", side_effect=write_success_batch):
+                exit_code = run_daily_mysql_job(
+                    config_path=Path("config/mysql.json"),
+                    db_path=db_path,
+                    log_dir=Path(directory),
+                    limit=1000,
+                    cursor_override=None,
+                )
+                logs = list(Path(directory).glob("daily-mysql-*.json"))
+                payload = json.loads(logs[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["health"], {"status": "ok", "reasons": []})
+        self.assertIn("source_backlog_remaining", payload["warnings"])
+        self.assertIn("run_additional_import_or_increase_limit", payload["recommended_actions"])
+        self.assertIn(
+            f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {db_path} --log-dir logs --limit 10000",
+            payload["recommended_commands"],
+        )
+
     def test_daily_mysql_job_marks_limit_reached_when_batch_reads_full_limit(self):
         batch = Mock(
             batch_id=11,

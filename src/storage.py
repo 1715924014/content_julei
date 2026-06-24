@@ -472,7 +472,8 @@ class Storage:
         }
         return [action_by_reason[reason] for reason in reasons if reason in action_by_reason]
 
-    def build_import_recommended_commands(self, actions: list[str], *, db_path: str = "data/analysis.db") -> list[str]:
+    @staticmethod
+    def build_import_recommended_commands(actions: list[str], *, db_path: str = "data/analysis.db") -> list[str]:
         command_db_path = format_command_arg(db_path)
         command_by_action = {
             "run_initial_import": f"python -m src.suggestion_pipeline run-daily-mysql --config config/mysql.prod.json --db {command_db_path} --log-dir logs --limit 10000",

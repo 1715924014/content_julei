@@ -192,8 +192,6 @@ def run_daily_mysql_job(
                     payload.update(
                         {
                             "health": summary["health"],
-                            "recommended_actions": list(dict.fromkeys(recommended_actions)),
-                            "recommended_commands": summary.get("recommended_commands", []),
                             "pending_review_tasks": summary["pending_review_tasks"],
                             "latest_successful_cursor": summary["latest_successful_cursor"],
                             "latest_batch_limit_reached": summary["latest_batch_limit_reached"],
@@ -208,6 +206,12 @@ def run_daily_mysql_job(
                 except Exception as exc:
                     payload["health_summary_error"] = str(exc)
                     payload["health_summary_error_type"] = type(exc).__name__
+                recommended_actions = list(dict.fromkeys(recommended_actions))
+                payload["recommended_actions"] = recommended_actions
+                payload["recommended_commands"] = Storage.build_import_recommended_commands(
+                    recommended_actions,
+                    db_path=str(db_path),
+                )
                 exit_code = 1 if has_failed_rows else 0
             except Exception as exc:
                 payload.update(
