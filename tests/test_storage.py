@@ -512,6 +512,42 @@ class StorageTests(unittest.TestCase):
             summary["recommended_commands"],
         )
 
+    def test_import_status_summary_deduplicates_shared_recommended_commands(self):
+        storage = self.make_storage()
+        batch_id = storage.start_import_batch("mysql", cursor_start="0")
+        storage.finish_import_batch(
+            batch_id,
+            "600",
+            rows_read=600,
+            rows_created=600,
+            rows_skipped=0,
+            rows_failed=0,
+        )
+        storage.connection.execute(
+            """
+            UPDATE import_batches
+            SET started_at = ?, finished_at = ?
+            WHERE batch_id = ?
+            """,
+            ("2026-06-23T00:00:00+00:00", "2026-06-23T00:10:00+00:00", batch_id),
+        )
+        storage.connection.commit()
+
+        summary = storage.get_import_status_summary(
+            "mysql",
+            max_duration_seconds=300,
+            min_throughput_rows_per_second=2.0,
+            command_db_path="data/analysis.db",
+        )
+
+        status_command = (
+            "python -m src.suggestion_pipeline status --db data/analysis.db --source mysql "
+            "--max-duration-seconds 300 --min-throughput-rows-per-second 2.0 --fail-on-unhealthy"
+        )
+        self.assertIn("review_runtime_capacity", summary["recommended_actions"])
+        self.assertIn("optimize_import_throughput", summary["recommended_actions"])
+        self.assertEqual(summary["recommended_commands"].count(status_command), 1)
+
     def test_source_suggestion_upsert_is_idempotent_for_same_classification_fields(self):
         storage = self.make_storage()
         row = {

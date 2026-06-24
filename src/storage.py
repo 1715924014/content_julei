@@ -515,7 +515,8 @@ class Storage:
             "optimize_import_throughput": status_command,
             "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output data/review_tasks.csv",
         }
-        return [command_by_action[action] for action in actions if action in command_by_action]
+        commands = [command_by_action[action] for action in actions if action in command_by_action]
+        return list(dict.fromkeys(commands))
 
     def calculate_batch_duration_seconds(self, batch: dict[str, Any] | None) -> int | None:
         if batch is None or not batch.get("started_at") or not batch.get("finished_at"):
