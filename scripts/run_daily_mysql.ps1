@@ -19,6 +19,15 @@ if (-not $env:MINI_PROGRAM_DB_PASSWORD) {
 if ($LogRetentionDays -lt 0) {
     Write-Error "LogRetentionDays must be zero or positive."
 }
+if ($Limit -le 0) {
+    Write-Error "Limit must be a positive integer."
+}
+if ($MaxDurationSeconds -lt 0) {
+    Write-Error "MaxDurationSeconds must be zero or positive."
+}
+if ($MinThroughputRowsPerSecond -lt 0) {
+    Write-Error "MinThroughputRowsPerSecond must be zero or positive."
+}
 
 Set-Location $ProjectRoot
 
