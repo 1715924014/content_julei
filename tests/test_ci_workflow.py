@@ -11,6 +11,7 @@ class CiWorkflowTests(unittest.TestCase):
         self.assertIn("actions/checkout", content)
         self.assertIn("actions/setup-python", content)
         self.assertIn("python -m pip install -r requirements.txt", content)
+        self.assertIn("git diff --check", content)
         self.assertIn("python -m unittest discover -s tests", content)
 
 
