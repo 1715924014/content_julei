@@ -433,12 +433,21 @@ class StorageTests(unittest.TestCase):
         )
         storage.connection.commit()
 
-        summary = storage.get_import_status_summary("mysql", max_duration_seconds=1200)
+        summary = storage.get_import_status_summary(
+            "mysql",
+            max_duration_seconds=1200,
+            command_db_path="data/analysis.db",
+        )
 
         self.assertEqual(summary["latest_batch_duration_seconds"], 1800)
         self.assertTrue(summary["latest_batch_duration_exceeded"])
         self.assertEqual(summary["health"]["status"], "warning")
         self.assertIn("latest_batch_exceeded_max_duration", summary["health"]["reasons"])
+        self.assertIn("review_runtime_capacity", summary["recommended_actions"])
+        self.assertIn(
+            "python -m src.suggestion_pipeline status --db data/analysis.db --source mysql --max-duration-seconds 1200 --fail-on-unhealthy",
+            summary["recommended_commands"],
+        )
 
     def test_import_status_summary_reports_latest_batch_throughput(self):
         storage = self.make_storage()
@@ -487,12 +496,21 @@ class StorageTests(unittest.TestCase):
         )
         storage.connection.commit()
 
-        summary = storage.get_import_status_summary("mysql", min_throughput_rows_per_second=2.0)
+        summary = storage.get_import_status_summary(
+            "mysql",
+            min_throughput_rows_per_second=2.0,
+            command_db_path="data/analysis.db",
+        )
 
         self.assertEqual(summary["latest_batch_rows_per_second"], 1.0)
         self.assertTrue(summary["latest_batch_throughput_below_minimum"])
         self.assertEqual(summary["health"]["status"], "warning")
         self.assertIn("latest_batch_below_min_throughput", summary["health"]["reasons"])
+        self.assertIn("optimize_import_throughput", summary["recommended_actions"])
+        self.assertIn(
+            "python -m src.suggestion_pipeline status --db data/analysis.db --source mysql --min-throughput-rows-per-second 2.0 --fail-on-unhealthy",
+            summary["recommended_commands"],
+        )
 
     def test_source_suggestion_upsert_is_idempotent_for_same_classification_fields(self):
         storage = self.make_storage()

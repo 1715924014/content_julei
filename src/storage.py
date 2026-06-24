@@ -453,7 +453,12 @@ class Storage:
             "pending_review_tasks": pending_review_tasks,
             "health": health,
             "recommended_actions": recommended_actions,
-            "recommended_commands": self.build_import_recommended_commands(recommended_actions, db_path=command_db_path),
+            "recommended_commands": self.build_import_recommended_commands(
+                recommended_actions,
+                db_path=command_db_path,
+                max_duration_seconds=max_duration_seconds,
+                min_throughput_rows_per_second=min_throughput_rows_per_second,
+            ),
             "table_counts": {
                 table_name: self.count_table(table_name)
                 for table_name in sorted(COUNTABLE_TABLES)
@@ -492,16 +497,22 @@ class Storage:
             f"--config {command_config_path} --db {command_db_path} "
             f"--log-dir {command_log_dir} --limit {command_limit}"
         )
+        status_command = f"python -m src.suggestion_pipeline status --db {command_db_path} --source mysql"
         if max_duration_seconds is not None:
             run_daily_command += f" --max-duration-seconds {max_duration_seconds}"
+            status_command += f" --max-duration-seconds {max_duration_seconds}"
         if min_throughput_rows_per_second is not None:
             run_daily_command += f" --min-throughput-rows-per-second {min_throughput_rows_per_second}"
+            status_command += f" --min-throughput-rows-per-second {min_throughput_rows_per_second}"
+        status_command += " --fail-on-unhealthy"
         command_by_action = {
             "run_initial_import": run_daily_command,
-            "inspect_running_import_or_lock": f"python -m src.suggestion_pipeline status --db {command_db_path} --source mysql --fail-on-unhealthy",
+            "inspect_running_import_or_lock": status_command,
             "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output data/latest_import_failures.csv",
             "run_additional_import_or_increase_limit": run_daily_command,
             "inspect_source_pending_count": f"python -m src.suggestion_pipeline doctor --config {command_config_path} --db {command_db_path}",
+            "review_runtime_capacity": status_command,
+            "optimize_import_throughput": status_command,
             "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output data/review_tasks.csv",
         }
         return [command_by_action[action] for action in actions if action in command_by_action]
