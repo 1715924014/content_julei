@@ -671,6 +671,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["error"], "database unavailable")
         self.assertEqual(payload["error_summary"], "database unavailable")
         self.assertEqual(payload["error_type"], "RuntimeError")
+        self.assertIn("daily_import_failed", payload["warnings"])
         self.assertIn("run_deployment_doctor", payload["recommended_actions"])
         self.assertIn(
             f"python -m src.suggestion_pipeline doctor --config {Path('config/mysql.json')} --db {Path('data/analysis.db')}",

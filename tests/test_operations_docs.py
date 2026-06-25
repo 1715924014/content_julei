@@ -31,6 +31,7 @@ class OperationsDocsTests(unittest.TestCase):
             "limit_reached",
             "source_backlog_remaining",
             "warnings",
+            "daily_import_failed",
             "latest_batch_still_running",
             "inspect_running_import_or_lock",
             "recommended_commands includes a status command for inspect_running_import_or_lock",

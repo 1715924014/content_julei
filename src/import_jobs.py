@@ -242,6 +242,7 @@ def run_daily_mysql_job(
                         "error": str(exc),
                         "error_summary": str(exc),
                         "error_type": type(exc).__name__,
+                        "warnings": ["daily_import_failed"],
                         "recommended_actions": recommended_actions,
                         "recommended_commands": Storage.build_import_recommended_commands(
                             recommended_actions,
