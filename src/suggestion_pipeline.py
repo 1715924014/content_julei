@@ -569,6 +569,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Minimum acceptable latest import throughput in rows per second",
     )
+    daily_mysql_parser.add_argument(
+        "--recommendation-output-dir",
+        type=Path,
+        default=Path("data"),
+        help="Directory to use in recommended export commands written to the daily job log",
+    )
     return parser
 
 
@@ -668,6 +674,7 @@ def main(argv: list[str] | None = None) -> int:
             log_dir=args.log_dir,
             cursor_override=args.cursor,
             limit=args.limit,
+            recommendation_output_dir=args.recommendation_output_dir,
             max_duration_seconds=args.max_duration_seconds,
             min_throughput_rows_per_second=args.min_throughput_rows_per_second,
         )

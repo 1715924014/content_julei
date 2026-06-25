@@ -79,6 +79,7 @@ def run_daily_mysql_job(
     log_dir: Path,
     limit: int | None = None,
     cursor_override: str | None = None,
+    recommendation_output_dir: Path = Path("data"),
     max_duration_seconds: int | None = None,
     min_throughput_rows_per_second: float | None = None,
 ) -> int:
@@ -95,6 +96,7 @@ def run_daily_mysql_job(
         "db_path": str(db_path),
         "limit": limit,
         "cursor_override": cursor_override,
+        "recommendation_output_dir": str(recommendation_output_dir),
         "max_duration_seconds": max_duration_seconds,
         "min_throughput_rows_per_second": min_throughput_rows_per_second,
     }
@@ -187,6 +189,7 @@ def run_daily_mysql_job(
                             max_duration_seconds=max_duration_seconds,
                             min_throughput_rows_per_second=min_throughput_rows_per_second,
                             command_db_path=str(db_path),
+                            command_output_dir=str(recommendation_output_dir),
                         )
                     recommended_actions = list(summary["recommended_actions"]) + recommended_actions
                     payload.update(
@@ -213,6 +216,7 @@ def run_daily_mysql_job(
                     db_path=str(db_path),
                     config_path=str(config_path),
                     log_dir=str(log_dir),
+                    output_dir=str(recommendation_output_dir),
                     limit=limit,
                     max_duration_seconds=max_duration_seconds,
                     min_throughput_rows_per_second=min_throughput_rows_per_second,

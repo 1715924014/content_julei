@@ -4,6 +4,7 @@ param(
     [string]$DbPath = "data\analysis.db",
     [string]$LogDir = "logs",
     [string]$BackupRoot = "backups",
+    [string]$RecommendationOutputDir = "data",
     [int]$LogRetentionDays = 90,
     [int]$Limit = 10000,
     [int]$MaxDurationSeconds = 0,
@@ -44,6 +45,7 @@ $DailyArgs = @(
     "--config", $ConfigPath,
     "--db", $DbPath,
     "--log-dir", $LogDir,
+    "--recommendation-output-dir", $RecommendationOutputDir,
     "--limit", $Limit
 )
 if ($MaxDurationSeconds -gt 0) {

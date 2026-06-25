@@ -19,6 +19,8 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertIn("--max-duration-seconds", content)
         self.assertIn("$MinThroughputRowsPerSecond", content)
         self.assertIn("--min-throughput-rows-per-second", content)
+        self.assertIn("$RecommendationOutputDir", content)
+        self.assertIn("--recommendation-output-dir", content)
         self.assertIn("$LogRetentionDays", content)
         self.assertIn("$LogRetentionDays -lt 0", content)
         self.assertIn("LogRetentionDays must be zero or positive", content)
