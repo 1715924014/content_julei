@@ -131,6 +131,7 @@ def run_daily_mysql_job(
                         "status": "failed",
                         "error": "another daily MySQL job is already running",
                         "error_summary": "another daily MySQL job is already running",
+                        "failure_stage": "acquire_daily_lock",
                         "warnings": ["daily_lock_present"],
                         "recommended_actions": recommended_actions,
                         "recommended_commands": Storage.build_import_recommended_commands(
@@ -243,6 +244,7 @@ def run_daily_mysql_job(
                         "error": str(exc),
                         "error_summary": str(exc),
                         "error_type": type(exc).__name__,
+                        "failure_stage": "import_mysql_batch",
                         "warnings": ["daily_import_failed"],
                         "recommended_actions": recommended_actions,
                         "recommended_commands": Storage.build_import_recommended_commands(

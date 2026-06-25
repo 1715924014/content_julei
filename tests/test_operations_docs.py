@@ -25,6 +25,7 @@ class OperationsDocsTests(unittest.TestCase):
             "failed rows return a non-zero exit code",
             "Manual `import-csv` and `import-mysql`",
             "error_type",
+            "failure_stage",
             "lock_path",
             "lock_started_at",
             "stale_lock_started_at",

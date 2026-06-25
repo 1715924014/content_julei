@@ -148,6 +148,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["error"], "another daily MySQL job is already running")
         self.assertEqual(payload["lock_path"], str(lock_path))
         self.assertEqual(payload["lock_started_at"], "2999-01-01T01:02:03+00:00")
+        self.assertEqual(payload["failure_stage"], "acquire_daily_lock")
         self.assertIn("daily_lock_present", payload["warnings"])
         self.assertIn("inspect_running_import_or_lock", payload["recommended_actions"])
         self.assertIn(
@@ -672,6 +673,7 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["error"], "database unavailable")
         self.assertEqual(payload["error_summary"], "database unavailable")
         self.assertEqual(payload["error_type"], "RuntimeError")
+        self.assertEqual(payload["failure_stage"], "import_mysql_batch")
         self.assertIn("daily_import_failed", payload["warnings"])
         self.assertIn("run_deployment_doctor", payload["recommended_actions"])
         self.assertIn(
