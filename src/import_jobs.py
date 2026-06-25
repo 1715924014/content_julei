@@ -125,11 +125,23 @@ def run_daily_mysql_job(
                     payload["lock_started_at"] = lock_path.read_text(encoding="utf-8").strip()
                 except OSError:
                     pass
+                recommended_actions = ["inspect_running_import_or_lock"]
                 payload.update(
                     {
                         "status": "failed",
                         "error": "another daily MySQL job is already running",
                         "error_summary": "another daily MySQL job is already running",
+                        "recommended_actions": recommended_actions,
+                        "recommended_commands": Storage.build_import_recommended_commands(
+                            recommended_actions,
+                            db_path=str(db_path),
+                            config_path=str(config_path),
+                            log_dir=str(log_dir),
+                            output_dir=str(recommendation_output_dir),
+                            limit=limit,
+                            max_duration_seconds=max_duration_seconds,
+                            min_throughput_rows_per_second=min_throughput_rows_per_second,
+                        ),
                     }
                 )
                 exit_code = 1

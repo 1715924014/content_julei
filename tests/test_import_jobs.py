@@ -143,6 +143,11 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(payload["error"], "another daily MySQL job is already running")
         self.assertEqual(payload["lock_path"], str(lock_path))
         self.assertEqual(payload["lock_started_at"], "2999-01-01T01:02:03+00:00")
+        self.assertIn("inspect_running_import_or_lock", payload["recommended_actions"])
+        self.assertIn(
+            f"python -m src.suggestion_pipeline status --db {Path('data/analysis.db')} --source mysql --fail-on-unhealthy",
+            payload["recommended_commands"],
+        )
         self.assertTrue(lock_exists_after_run)
         import_batch.assert_not_called()
 
