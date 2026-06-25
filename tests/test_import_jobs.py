@@ -106,6 +106,11 @@ class ImportJobTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(payload["status"], "failed")
         self.assertIn("limit", payload["error_summary"])
+        self.assertIn("run_deployment_doctor", payload["recommended_actions"])
+        self.assertIn(
+            f"python -m src.suggestion_pipeline doctor --config {Path('config/mysql.json')} --db {Path('data/analysis.db')}",
+            payload["recommended_commands"],
+        )
 
     def test_daily_mysql_job_refuses_to_run_when_lock_exists(self):
         batch = Mock(
