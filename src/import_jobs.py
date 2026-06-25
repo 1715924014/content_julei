@@ -131,6 +131,7 @@ def run_daily_mysql_job(
                         "status": "failed",
                         "error": "another daily MySQL job is already running",
                         "error_summary": "another daily MySQL job is already running",
+                        "warnings": ["daily_lock_present"],
                         "recommended_actions": recommended_actions,
                         "recommended_commands": Storage.build_import_recommended_commands(
                             recommended_actions,
