@@ -54,6 +54,7 @@ class OperationsDocsTests(unittest.TestCase):
             "export_import_failures_and_repair_rows",
             "--latest",
             "--min-throughput-rows-per-second",
+            "--recommendation-output-dir",
             "latest_batch_duration_exceeded",
             "latest_batch_exceeded_max_duration",
             "--daily-limit",

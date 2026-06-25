@@ -88,7 +88,7 @@ python -m src.suggestion_pipeline status --db data/analysis.db --source mysql
 - `latest_batch_throughput_below_minimum`: true when `status --min-throughput-rows-per-second N` shows the latest batch processed fewer than `N` rows per second.
 - `latest_batch_duration_exceeded`: true when `status --max-duration-seconds N` shows the latest batch took longer than `N` seconds.
 - `pending_review_tasks`: pending manual review count. Keep it low to prevent uncertain clusters from accumulating.
-- For monitoring scripts, run `status --daily-limit 10000 --max-duration-seconds 3600 --min-throughput-rows-per-second 2 --fail-on-unhealthy`; it still prints JSON but returns exit code `1` when `health.status` is not `ok`.
+- For monitoring scripts, run `status --daily-limit 10000 --max-duration-seconds 3600 --min-throughput-rows-per-second 2 --fail-on-unhealthy`; it still prints JSON but returns exit code `1` when `health.status` is not `ok`. Add `--recommendation-output-dir "daily exports"` when recommended export commands should write repair CSVs to a custom directory.
 - `table_counts.source_suggestions`：本地已保存源建议总数。
 - `table_counts.issue_clusters`：当前问题簇总数。
 

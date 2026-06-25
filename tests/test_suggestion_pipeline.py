@@ -378,6 +378,52 @@ class SuggestionPipelineTests(unittest.TestCase):
         )
         self.assertNotIn("--db data/analysis.db", "\n".join(payload["recommended_commands"]))
 
+    def test_status_recommended_commands_use_requested_output_dir(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "custom-analysis.db"
+            with closing(connect_analysis_db(db_path)) as connection:
+                storage = Storage(connection)
+                storage.initialize_schema()
+                batch_id = storage.start_import_batch("mysql", cursor_start="0")
+                storage.record_import_failure(
+                    batch_id=batch_id,
+                    source_suggestion_id="S001",
+                    source_cursor="1",
+                    row_number=1,
+                    error_message="missing raw_text",
+                    raw_row={"id": 1},
+                )
+                storage.finish_import_batch(
+                    batch_id,
+                    "1",
+                    rows_read=1,
+                    rows_created=0,
+                    rows_skipped=0,
+                    rows_failed=1,
+                    error_summary="1 row missing raw_text",
+                )
+
+            from src.suggestion_pipeline import main
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main([
+                    "status",
+                    "--db",
+                    str(db_path),
+                    "--source",
+                    "mysql",
+                    "--recommendation-output-dir",
+                    "daily exports",
+                ])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertIn(
+            f'python -m src.suggestion_pipeline export-import-failures --db {db_path} --latest --output "daily exports/latest_import_failures.csv"',
+            payload["recommended_commands"],
+        )
+
     def test_status_can_fail_when_health_is_unhealthy(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "analysis.db"

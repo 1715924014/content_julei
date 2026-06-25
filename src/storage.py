@@ -398,6 +398,7 @@ class Storage:
         max_duration_seconds: int | None = None,
         min_throughput_rows_per_second: float | None = None,
         command_db_path: str = "data/analysis.db",
+        command_output_dir: str = "data",
     ) -> dict[str, Any]:
         latest_batch = self.connection.execute(
             """
@@ -456,6 +457,7 @@ class Storage:
             "recommended_commands": self.build_import_recommended_commands(
                 recommended_actions,
                 db_path=command_db_path,
+                output_dir=command_output_dir,
                 max_duration_seconds=max_duration_seconds,
                 min_throughput_rows_per_second=min_throughput_rows_per_second,
             ),
@@ -484,6 +486,7 @@ class Storage:
         db_path: str = "data/analysis.db",
         config_path: str = "config/mysql.prod.json",
         log_dir: str = "logs",
+        output_dir: str = "data",
         limit: int | None = 10000,
         max_duration_seconds: int | None = None,
         min_throughput_rows_per_second: float | None = None,
@@ -491,6 +494,9 @@ class Storage:
         command_db_path = format_command_arg(db_path)
         command_config_path = format_command_arg(config_path)
         command_log_dir = format_command_arg(log_dir)
+        output_dir_prefix = output_dir.rstrip("/\\") or "."
+        latest_import_failures_output = format_command_arg(f"{output_dir_prefix}/latest_import_failures.csv")
+        review_tasks_output = format_command_arg(f"{output_dir_prefix}/review_tasks.csv")
         command_limit = 10000 if limit is None else limit
         run_daily_command = (
             "python -m src.suggestion_pipeline run-daily-mysql "
@@ -508,12 +514,12 @@ class Storage:
         command_by_action = {
             "run_initial_import": run_daily_command,
             "inspect_running_import_or_lock": status_command,
-            "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output data/latest_import_failures.csv",
+            "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output {latest_import_failures_output}",
             "run_additional_import_or_increase_limit": run_daily_command,
             "inspect_source_pending_count": f"python -m src.suggestion_pipeline doctor --config {command_config_path} --db {command_db_path}",
             "review_runtime_capacity": status_command,
             "optimize_import_throughput": status_command,
-            "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output data/review_tasks.csv",
+            "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output {review_tasks_output}",
         }
         commands = [command_by_action[action] for action in actions if action in command_by_action]
         return list(dict.fromkeys(commands))

@@ -502,6 +502,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minimum acceptable latest import throughput in rows per second",
     )
     status_parser.add_argument(
+        "--recommendation-output-dir",
+        type=Path,
+        default=Path("data"),
+        help="Directory to use in recommended export commands",
+    )
+    status_parser.add_argument(
         "--fail-on-unhealthy",
         action="store_true",
         help="Return exit code 1 when health.status is not ok",
@@ -597,6 +603,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_duration_seconds=args.max_duration_seconds,
                 min_throughput_rows_per_second=args.min_throughput_rows_per_second,
                 command_db_path=str(args.db),
+                command_output_dir=str(args.recommendation_output_dir),
             )
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         if args.fail_on_unhealthy and summary["health"]["status"] != "ok":

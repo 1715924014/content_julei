@@ -323,6 +323,22 @@ class StorageTests(unittest.TestCase):
             summary["recommended_commands"],
         )
 
+    def test_import_recommended_commands_quote_custom_output_dir_with_spaces(self):
+        commands = Storage.build_import_recommended_commands(
+            ["export_import_failures_and_repair_rows", "review_pending_cluster_tasks"],
+            db_path="data/analysis.db",
+            output_dir="daily exports",
+        )
+
+        self.assertIn(
+            'python -m src.suggestion_pipeline export-import-failures --db data/analysis.db --latest --output "daily exports/latest_import_failures.csv"',
+            commands,
+        )
+        self.assertIn(
+            'python -m src.suggestion_pipeline export-review-tasks --db data/analysis.db --output "daily exports/review_tasks.csv"',
+            commands,
+        )
+
     def test_import_status_summary_warns_when_latest_batch_is_running(self):
         storage = self.make_storage()
         storage.start_import_batch("mysql", cursor_start="100")
