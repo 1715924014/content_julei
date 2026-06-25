@@ -517,6 +517,7 @@ class Storage:
             "export_import_failures_and_repair_rows": f"python -m src.suggestion_pipeline export-import-failures --db {command_db_path} --latest --output {latest_import_failures_output}",
             "run_additional_import_or_increase_limit": run_daily_command,
             "inspect_source_pending_count": f"python -m src.suggestion_pipeline doctor --config {command_config_path} --db {command_db_path}",
+            "run_deployment_doctor": f"python -m src.suggestion_pipeline doctor --config {command_config_path} --db {command_db_path}",
             "review_runtime_capacity": status_command,
             "optimize_import_throughput": status_command,
             "review_pending_cluster_tasks": f"python -m src.suggestion_pipeline export-review-tasks --db {command_db_path} --output {review_tasks_output}",

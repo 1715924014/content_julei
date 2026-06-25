@@ -42,6 +42,7 @@ class OperationsDocsTests(unittest.TestCase):
             "source_pending_error_summary",
             "source_pending_count_unavailable",
             "inspect_source_pending_count",
+            "run_deployment_doctor",
             "recommended_commands includes a doctor command for inspect_source_pending_count",
             "latest_batch_throughput_below_minimum",
             "latest_batch_below_min_throughput",

@@ -235,12 +235,24 @@ def run_daily_mysql_job(
                 )
                 exit_code = 1 if has_failed_rows else 0
             except Exception as exc:
+                recommended_actions = ["run_deployment_doctor"]
                 payload.update(
                     {
                         "status": "failed",
                         "error": str(exc),
                         "error_summary": str(exc),
                         "error_type": type(exc).__name__,
+                        "recommended_actions": recommended_actions,
+                        "recommended_commands": Storage.build_import_recommended_commands(
+                            recommended_actions,
+                            db_path=str(db_path),
+                            config_path=str(config_path),
+                            log_dir=str(log_dir),
+                            output_dir=str(recommendation_output_dir),
+                            limit=limit,
+                            max_duration_seconds=max_duration_seconds,
+                            min_throughput_rows_per_second=min_throughput_rows_per_second,
+                        ),
                     }
                 )
                 exit_code = 1
