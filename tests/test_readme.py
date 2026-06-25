@@ -18,6 +18,7 @@ class ReadmeTests(unittest.TestCase):
             "recommended_actions",
             "recommended_commands",
             "run_deployment_doctor",
+            "daily_lock_present",
             "export-review-tasks",
             "--latest",
             "import-review-results",
