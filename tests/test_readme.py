@@ -19,6 +19,7 @@ class ReadmeTests(unittest.TestCase):
             "recommended_commands",
             "run_deployment_doctor",
             "daily_import_failed",
+            "failure_stage",
             "daily_lock_present",
             "export-review-tasks",
             "--latest",
